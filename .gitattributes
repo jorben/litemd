@@ -1,0 +1,2 @@
+# 保真语料按字节保存（含 CRLF、BOM、混合换行样例），git 不得改动换行
+testdata/** -text

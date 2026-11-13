@@ -1,0 +1,301 @@
+# Supported Formats
+
+VMark opens every file format below directly. The differentiator is **schema-aware previews**: when the file is a known artifact, VMark renders the *right* view, not a generic JSON tree.
+
+[[toc]]
+
+## Enabling formats
+
+Markdown, plain text, and YAML/YML always open in their full editors — those are the calm defaults. Every other format below is **off by default** and gated behind a category toggle in **Settings → Formats**:
+
+| Toggle | Enables |
+|---|---|
+| **Data formats** | `.json`, `.jsonl`, `.toml` (split-pane source + tree, with Cargo / package.json / pyproject schema renderers) |
+| **Diagrams & SVG** | `.mmd`, `.svg` (split-pane source + sanitized live render) |
+| **HTML preview** | `.html`, `.htm` (sandboxed iframe — see [Security model for HTML](#security-model-for-html)) |
+| **Code viewers** | 12 read-only code viewers (`.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs`, `.go`, `.css`, `.sh`, `.bash`, `.rb`, `.lua`) |
+
+When a category is off, the matching extensions fall through to the plain-text fallback so the file still opens — just without the preview / schema view. Flip a toggle and the registry rebuilds in place; open tabs remount with the proper adapter.
+
+On the first launch after upgrading to multi-format support, VMark surfaces a one-time toast nudging you to **Settings → Formats**. If you dismissed it (or installed fresh), the panel is at **Settings → Formats** any time.
+
+## At a glance
+
+| Family | Extensions | Default | Editor | Preview |
+|---|---|---|---|---|
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | always on | WYSIWYG + Source modes | rendered prose |
+| Plain text | `.txt` | always on | source | — |
+| Data — YAML | `.yaml`, `.yml` | always on | source + tree | navigable tree, schema-aware (GitHub Actions, VMark workflows) |
+| Data — JSON | `.json`, `.jsonl` | requires **Data formats** toggle | source + tree | navigable JSON tree, schema-aware (`package.json`) |
+| Data — TOML | `.toml` | requires **Data formats** toggle | source + tree | navigable tree, schema-aware (`Cargo.toml`, `pyproject.toml`) |
+| Diagrams | `.mmd` | requires **Diagrams & SVG** toggle | source + render | live Mermaid diagram |
+| Vector | `.svg` | requires **Diagrams & SVG** toggle | source + render | sanitized inline render |
+| Web | `.html`, `.htm` | requires **HTML preview** toggle | source + render | sandboxed iframe (empty `sandbox=""`, DOMPurify, CSP); [trusted mode](#trusted-html-preview-opt-in) is opt-in per file |
+| Code (read-only) | `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs`, `.go`, `.css`, `.sh`, `.bash`, `.rb`, `.lua` | requires **Code viewers** toggle | viewer (toggle to edit) | — |
+| Media | images (`.png`, `.jpg`, `.gif`, `.webp`, `.heic`, `.tiff`, …), video (`.mp4`, `.webm`, `.mov`, …), audio (`.mp3`, `.wav`, `.flac`, …) | always on | viewer (read-only) | native image / `<video>` / `<audio>` |
+
+Code files default to read-only with a banner offering **Enable editing** or **Open in external editor**.
+
+## View modes (Source / Split / Preview)
+
+Any format that has a preview — HTML, SVG, Mermaid, JSON, YAML, TOML — opens with
+a small **Source · Split · Preview** toggle in the top-right corner:
+
+- **Source** — the editable source pane, full width.
+- **Split** — source and preview side by side (the default).
+- **Preview** — the rendered result, full width. Preview is a **read-only**
+  render; to edit, switch back to Source or Split.
+
+You can also switch from the keyboard: **`F6`** toggles Source ⇄ Split and
+**`Shift + F6`** toggles Preview ⇄ Split (Split is the base state). The choice is
+remembered per tab. Set the default for newly-opened files under
+**Settings → Formats → Default view mode**.
+
+Formats without a preview (plain text, code viewers) always show source only, so
+no toggle appears.
+
+## Media files (images, video, audio)
+
+Open a picture, video, or audio file and VMark shows it inline — like Quick
+Look in Finder. Two ways to preview:
+
+- **Open it** (click it in the file explorer, use **File → Open File…**, or
+  drag it in) to view it in a tab.
+- **Quick Look**: select a file in the explorer and press **Space** for a
+  full-window preview overlay. Press **Space**, **Esc**, or click the backdrop
+  to close.
+
+How it works and what to expect:
+
+- **Never loaded as text.** Media is binary — VMark streams the file straight
+  to the viewer through the native asset pipeline. It is never read as UTF-8,
+  never held in memory as a document, and never editable or saved. Even
+  multi-gigabyte videos open instantly and seek natively.
+- **Edits on disk show up.** Re-export the image from your editor, or let a
+  script rewrite it, and the open tab picks up the new version by itself — no
+  reopening, no closing and re-opening the file.
+- **Broad format coverage.** VMark hands the file to the platform's media
+  engine, so support tracks what your system's webview can decode. On macOS
+  that is wide — HEIC, TIFF, `.mov`/H.264, and FLAC all play. Formats the
+  webview can't decode (e.g. `.mkv`, `.avi`, `.wmv`) still open, showing a
+  fallback panel with **Open with default app** and **Reveal in Finder**
+  (**Show in Explorer** on Windows, **Show in File Manager** on Linux).
+- **Read-only.** Media tabs never become dirty and close without a save prompt.
+
+## Schema-aware previews
+
+When the path or content matches a known schema, VMark substitutes the right view for the generic tree.
+
+### GitHub Actions workflow (`.github/workflows/*.yml`)
+
+Opens with the workflow workbench: the interactive job-DAG canvas plus a structured forms editor with Save / Discard (see the [Workflow Viewer guide](/guide/workflow-viewer)). The source pane is workflow-aware too — `${{ }}` expression completion, cursor-to-canvas job highlighting, and Cmd-click on local `uses:` references.
+
+- Path detection: a `.yml` / `.yaml` file under `.github/workflows/` routes to the workflow renderer — even with malformed YAML, so you see the degraded view with diagnostics rather than a blank tree. (The file must reach the YAML adapter first; that requires the `.yml`/`.yaml` extension.)
+- Content detection: top-level `on:` and `jobs:` keys.
+
+### VMark workflow (top-level `steps:`)
+
+Opens with the workflow run panel: a **Run** / **Cancel** toolbar with a status line, the live step graph (or the parse error), and **Restore Files** after a run that wrote files. See the [Workflows guide](/guide/workflows).
+
+- Path detection: never under `.github/workflows/` — GitHub owns that folder.
+- Content detection: the YAML parses, has no top-level `jobs:`, and has a top-level `steps:` list in which at least one step's `uses:` starts with `genie/`, `action/` or `webhook/`. Broken YAML is never a VMark workflow.
+- The panel needs **Settings → Advanced → Workflow Engine**. With the engine off, the file shows the plain YAML tree (unless a run started from this tab is still live, so its Cancel stays reachable).
+
+### `Cargo.toml`
+
+Opens with a Rust dependency tree — runtime, dev, and build dependencies, with version specs and feature flags.
+
+- Path detection: filename `Cargo.toml` (case-insensitive) on POSIX or Windows paths.
+- Content detection: `[package]` or `[workspace]` header.
+- No network calls — VMark never resolves crates.io.
+
+### `package.json`
+
+Opens with an npm dependency tree — `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`.
+
+- Path detection: filename `package.json`.
+- Content detection: top-level `name` plus any of `dependencies` / `devDependencies` / `peerDependencies`.
+
+### `pyproject.toml`
+
+Opens with a Python dependency tree — both PEP 621 (`[project]` + `[project.optional-dependencies]`) and Poetry (`[tool.poetry.dependencies]`, `[tool.poetry.dev-dependencies]`, `[tool.poetry.group.<name>.dependencies]`).
+
+- Path detection: filename `pyproject.toml`.
+- Content detection: `[project]` or `[tool.poetry]` header (gated on a clean TOML parse).
+
+## Editing rules
+
+- **Markdown** ships the full toolbar, paragraph formatting, CJK rules, math, mermaid, footnotes — every existing markdown feature.
+- **Data formats** (JSON, YAML, TOML) ship in the source pane with parse-error gutter markers; the tree preview updates as you type. Markdown-only menu actions are disabled (CJK formatting, insert-block, paragraph formatting); mode-relevant controls remain active. The right-click context menu is reduced to clipboard actions (Cut/Copy/Paste/Select All).
+- **Visual formats** (Mermaid, SVG, HTML) ship in the source pane with the rendered view in the right pane. The preview renders at lower priority than your typing, so on a large document it catches up a beat behind the caret rather than re-rendering on every keystroke.
+- **Code formats** open as syntax-highlighted viewers; toggle to edit in place or open in your external editor (see below).
+
+## Markdown dialect
+
+VMark reads and writes Markdown with remark (micromark underneath): CommonMark, plus GitHub Flavored Markdown (tables, task lists, strikethrough with `~~`, autolinks, footnotes), YAML front matter, `$…$` / `$$…$$` math, wiki links (`[[target]]`), GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), `<details>` blocks, `[TOC]`, and four inline marks: `==highlight==`, `~subscript~`, `^superscript^` and `++underline++`. A single tilde is subscript, never strikethrough.
+
+**Nesting limit.** WYSIWYG supports blockquotes and lists nested up to 1000 levels deep. A deeper document opens in **Source mode** with a message saying how deep it is, and the status bar shows *"Opened in Source mode (cannot be displayed in WYSIWYG)."* While it is in that state, the file is protected from being overwritten by the rich editor. Reduce the nesting, then use **Switch to WYSIWYG**. Fenced code, thematic breaks and inline emphasis do not count toward the limit. See also [Large Files](/guide/large-files).
+
+## How VMark decides a file's type
+
+VMark treats **markdown as an allowlist, not a default**. The rule, in order:
+
+1. **A markdown-family extension** (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx`) opens in the rich markdown editor.
+2. **A registered non-markdown extension** (when its category is enabled — JSON, YAML, code viewers, etc.) opens in that format's source pane.
+3. **Everything else** — `.env`, `.env.local`, `Dockerfile`, `Makefile`, `.gitignore`, unknown extensions — opens in the **plain-text source pane**, never the markdown editor.
+
+This means a config file is never silently rendered as markdown. A `.env.local` opens as plain text, with its `KEY=value` lines, `#` comments, and underscores left exactly as typed.
+
+Dotfile families are recognized as a group: an override on `.env` covers `.env.local`, `.env.production`, and so on.
+
+### Opening files from your system
+
+The installer registers VMark with your operating system as an editor for these file types, so they appear in **Open With** and can be double-clicked into VMark:
+
+| Extensions | Registered as |
+|---|---|
+| `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | Markdown Document |
+| `.txt` | Plain Text Document |
+| `.json`, `.jsonl` | JSON Document |
+| `.yaml`, `.yml` | YAML Document |
+| `.toml` | TOML Document |
+| `.mmd` | Mermaid Diagram |
+| `.svg` | SVG Image |
+| `.html`, `.htm` | HTML Document |
+
+On **Windows**, the installer does not take over a file type something else already handles: for each extension that already has a default program, VMark adds itself to **Open With** and leaves that default in place. It becomes the default only where nothing was registered — in practice the Markdown extensions, not `.txt`, `.html`, `.htm` or `.svg`. A default you choose yourself in Windows settings always wins. Uninstalling restores Windows' **New → Text Document** menu entry and the previous handler.
+
+A registered file opens in VMark only if its format is enabled (see [Enabling formats](#enabling-formats)); otherwise it opens as plain text.
+
+On Windows and Linux, a folder passed on the command line (`vmark C:\notes` or `vmark ~/notes`) opens as a workspace in its own window, as dropping a folder on the Dock icon does on macOS. This also works when VMark is already running.
+
+### Syntax highlighting for plain files
+
+Even when a file opens as plain text, VMark colorizes it when it recognizes the type — `.env`/`.ini`/`.conf` (properties), `.sh`/`.bash` (shell), `Dockerfile`, `.toml`, `.sql`, `.diff`, and the usual languages. This is purely cosmetic; it never changes which editor the file opened in, and it works regardless of whether the code-viewer category is enabled.
+
+### Override: "Set File Type"
+
+The detection is the default, not a cage. Open the command palette and run:
+
+- **Set File Type: Plain Text** — force the current file family to open as plain text (e.g. stop a `.txt` you keep as raw notes from being rendered).
+- **Set File Type: Markdown** — render a non-`.md` file with the markdown editor (e.g. a `.txt` you actually write markdown in).
+- **Set File Type: Reset to Default** — drop the override.
+
+Overrides are remembered per file family (by extension, or by dotfile stem for files like `.env`) and persist across sessions. They take precedence over the built-in rules above.
+
+## Find, save, content search
+
+- **File → Open File…** offers two filters: **All Supported** (every registered format) and **Markdown**. The item has no default shortcut — `Mod + O` is Quick Open — but you can assign one in **Settings → Shortcuts**. Save-As filters and the default save extension are derived from the active tab's format adapter, so saving a `.toml` file proposes `.toml` as the extension.
+- **Drag-drop** accepts any registered extension.
+- **Save As** filters and the default extension on save are derived from the active tab's format adapter.
+- **Cmd+Shift+H** content search ("Find in Files") indexes every text-like format (markdown, txt, json, yaml, toml, html, svg, mermaid). Code files are excluded by default — they're code-viewer mode.
+
+## Security model for HTML
+
+Per ADR-4 in the multi-format plan, HTML preview rests on three independent layers of defense:
+
+1. **`<iframe sandbox="">`** with an empty allow-list — no scripts, no same-origin, no forms, no popups. Sandboxing is enforced by the iframe attribute alone (CSP via `<meta>` is not a sandbox per MDN).
+2. **DOMPurify sanitization** runs first — strips `<script>`, `javascript:` URLs, inline event handlers, base-href tricks.
+3. **CSP `<meta>` injection** — `default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none';` — restricts in-iframe resource loading.
+
+The validator surfaces script tags, `javascript:` URLs, and inline event handlers as warnings so you can see what's being blocked. Once you [trust the file](#trusted-html-preview-opt-in) they are shown as information instead, so nothing contradicts the trusted banner. Two messages say what the preview never allows, trusted or not: an external script (`<script src="…">`) is never loaded, since no script comes from a file or URL, and a `javascript:` link aimed at another window or the top page (`target="_top"`, `_blank`, or a `<base target>`) never navigates, since the preview cannot leave itself. Detection reads the page's tags approximately; it labels findings and never decides what runs — the sandbox does.
+
+The formal security sign-off for this preview is still pending, and the preview says so in a notice above the rendered page: **HTML preview is sandboxed. Its security review is still in progress.** The three layers above are in place; the outstanding step is confirming them against the OWASP XSS payloads inside the running app's webview.
+
+### Trusted HTML preview (opt-in)
+
+The safe preview above is the default and never changes. For a document you
+wrote yourself — an interactive lab, a local dashboard, a self-contained demo —
+you can authorize script execution for **that one file, for this session**.
+
+Use **Enable trusted preview…** in the bar above the preview. You get a warning
+first; nothing runs until you confirm. While it is active the bar stays visible
+and says **Trusted — scripts enabled**, and **Revoke trust** is one click away.
+
+What trusted mode grants, and what it does not:
+
+| | Trusted preview |
+|---|---|
+| JavaScript, DOM, pointer events, `requestAnimationFrame`, Web Audio | ✅ runs |
+| Network (`fetch`, `XMLHttpRequest`, WebSocket, remote images/scripts) | ❌ blocked by `default-src 'none'` |
+| VMark's own page, Tauri commands, your filesystem | ❌ unreachable — the document runs in an opaque origin of its own |
+| Top-level navigation, popups, form submission, downloads, modals | ❌ not granted (`sandbox="allow-scripts"` and nothing else) |
+| Camera, microphone, geolocation, clipboard | ❌ no feature is delegated to the frame |
+| `localStorage` / `sessionStorage` | ❌ unavailable — an opaque origin has no same-origin storage |
+| `eval` / `new Function` | ❌ not permitted |
+
+Three properties worth knowing:
+
+- **Trust is never inferred.** Not from the `.html` extension, not from where
+  the file came from, not from a sibling file you already trusted. Only the
+  confirmation grants it.
+- **Trust is never persisted.** Close VMark and every grant is gone. It is also
+  unavailable for an unsaved document, which has no identity to attach a grant
+  to — save the file first.
+- **A trusted preview never re-runs itself.** Editing the source marks it
+  *May not match the current source* and waits for **Reload**, so a running
+  simulation is not reset by every keystroke. The same marker appears when
+  VMark cannot know what the frame is running — after you switch away from the
+  tab and back, or close and reopen it, the preview keeps executing whatever
+  was last published for that file, so it says so rather than claiming to be
+  up to date. **Reload** re-publishes the file as it stands now.
+
+::: info Windows serves it over a local http origin
+WebView2 has no custom URL schemes, so on Windows the trusted document is served
+from `http://vmark-trusted.localhost` instead of `vmark-trusted://` — the same
+grant, the same sandbox and the same CSP, under the URL form Tauri uses for every
+custom protocol there. The safe preview works on every platform.
+:::
+
+Trusted content is served from a `vmark-trusted://` origin
+(`http://vmark-trusted.localhost` on Windows) with its own restrictive CSP. That indirection is required rather than decorative: a
+`srcdoc`, `blob:` or `data:` frame inherits VMark's own `script-src 'self'`
+policy, and a CSP inside the frame can only tighten an inherited one, never
+relax it — so no iframe attribute alone can make an inline script run.
+
+## Open in external editor
+
+For code files, the read-only banner's **Open in external editor** button launches your editor of choice. Resolution order:
+
+1. **Settings → Formats → External editor** (the GUI field — see [Settings](/guide/settings#formats)). Enter either the **name of a known editor** (`code`, `cursor`, `zed`, `subl`, `bbedit`, `idea`, `vim`, `nvim`, `emacs`, `notepad++`, …) or the **full path** of an editor — an `.app` bundle on macOS, an executable on Linux/Windows. The field holds one program, never arguments; to pass arguments, use `$VMARK_EXTERNAL_EDITOR`.
+2. `$VMARK_EXTERNAL_EDITOR` (project-level env override)
+3. `$VISUAL`
+4. `$EDITOR`
+5. Platform default (`open -t` on macOS, `notepad.exe` on Windows, `xdg-open` on Linux)
+
+The GUI setting wins over the environment variables — explicit beats implicit. Leave the field empty to use the env-var fallback chain.
+
+VMark routes through a login-shell PATH so VS Code / Cursor / JetBrains wrappers resolve correctly when launched from a macOS GUI app.
+
+### Security gate
+
+The **External editor** setting itself is checked before anything launches. VMark refuses:
+
+- shell characters (`;`, `|`, `&`, `` ` ``, `$`, `<`, `>`, quotes, line breaks) and a leading `-`
+- a bare name that is not an editor VMark knows — *"“X” is not an editor VMark knows by name — enter the full path to the editor instead"*
+- a relative path, a path with a `..` segment or a trailing slash, or a path that does not exist
+- a program that runs the files it is given instead of opening them — a shell (`sh`, `bash`, `zsh`, `pwsh`, `cmd`, …), an interpreter (`python`, `node`, `ruby`, `perl`, `osascript`, …), a launcher (`env`, `sudo`, `open`, `xdg-open`, …) or a terminal emulator — checked under both the name you typed and the name a link resolves to
+
+The environment variables in the fallback chain are not restricted: they are set outside VMark, by you.
+
+The `open_in_external_editor` Tauri command also rejects:
+
+- non-existent paths
+- directories and other non-regular files (sockets, devices)
+- paths whose canonicalized extension is not in VMark's registered format set
+- symlinks whose canonical target fails any of the checks above
+
+A compromised webview cannot use the button to launch the external editor on arbitrary system files (passwords, keys, etc.) — only on paths VMark would itself open.
+
+## What's not supported
+
+Per the plan's non-goals:
+
+- **Not a code editor.** No LSP, no autocomplete, no refactoring, no debugger, no git gutters.
+- **Not "every plain-text format."** Bounded scope — see the table above.
+- **No HTML script execution by default.** Sandboxed render only, unless you
+  explicitly authorize one file via [Trusted HTML preview](#trusted-html-preview-opt-in).
+- **No print / export / copy-as-HTML for non-markdown formats** in v1.
+- **Not yet supported as code viewers**: Zig, Swift, Kotlin, Java, Elixir, OCaml, and other languages outside the 12-extension set. The decision rule is "languages we ourselves use" — file an issue if you'd like one added.
+
+If a format you want isn't listed and isn't deliberately out of scope, file an issue.

@@ -1,0 +1,252 @@
+# Inline Popups
+
+VMark provides contextual popups for editing links, images, media, math, footnotes, and more. These popups work in both WYSIWYG and Source modes with consistent keyboard navigation.
+
+## Common Keyboard Shortcuts
+
+All popups share these keyboard behaviors:
+
+| Action | Shortcut |
+|--------|----------|
+| Close/Cancel | `Escape` |
+| Confirm/Save | `Enter` |
+| Navigate fields | `Tab` / `Shift + Tab` |
+
+## Link Popup
+
+Clicking a link shows its edit popup. The caret stays where you clicked, so you can keep editing the link text — typing, `Backspace`, and copy/paste all act on the document. The popup closes as soon as you edit the text or move the caret off the link.
+
+### Edit Existing Link
+
+**Trigger:** Click a link, or place the cursor in a link + `Mod + K`
+
+A click leaves the keyboard in the document; click the URL field to edit the destination. `Mod + K` moves focus straight into the URL field.
+
+**Fields:**
+- **URL** — Edit the link destination
+- **Open target** — Opens an external URL in the browser, jumps to the heading for `#bookmark` links, or opens a local file in a new tab for cross-file links
+- **Copy** — Copy URL to clipboard
+- **Delete** — Remove link, keep text
+
+**Open without the popup:** `Cmd + Click` (`Ctrl + Click` on Windows/Linux) on a link opens its target directly.
+
+### Create New Link
+
+**Trigger:** Select text + `Mod + K`
+
+**Smart clipboard:** If your clipboard contains a URL, it's auto-filled.
+
+**Fields:**
+- **URL input** — Enter destination
+- **Confirm** — Press Enter or click ✓
+- **Cancel** — Press Escape or click ✗
+
+### Source Mode
+
+- **`Cmd + Click`** (`Ctrl + Click` on Windows/Linux) on link → external URLs open in the browser, `#bookmark` links jump to the heading, and local file paths open the file in a new tab
+- **Click** on `[text](url)` syntax → shows edit popup; the caret stays in the markdown so you can keep typing
+- **`Mod + K`** inside link → shows edit popup with focus in the URL field
+
+::: tip Bookmark Links
+Links starting with `#` are treated as bookmarks (internal heading links). Open jumps to the heading instead of opening a browser.
+:::
+
+::: tip Cross-File Links
+Links pointing to local files open the target file in a new tab, landing on the heading when the link carries a `#fragment`. Relative paths like `../appendix/cards.md` or `./notes.md` are resolved against the current document's directory. Absolute paths — `/Users/me/notes/a.md` on macOS/Linux, `C:\notes\a.md` on Windows — open exactly the file they name. Network paths (`\\server\share\…`) are not opened from links. If the document is untitled, only absolute paths can be opened.
+:::
+
+## Heading Picker (Bookmark Links)
+
+**Trigger:** `Alt + Mod + B` (Bookmark Link), **Insert → Links → Bookmark**, or the link group of the Universal Toolbar
+
+A bookmark link points at a heading in the same document (`[text](#heading-id)`). Instead of typing the anchor, the picker lists every heading in the document, indented by level, with a filter field at the top.
+
+**Behavior:**
+- `↑`/`↓` move through the list, `Enter` inserts the link, `Escape` closes
+- With text selected, the selection becomes the link text; with no selection, the heading's own text is inserted as the link
+- The popup says so when the document has no headings, or when nothing matches the filter
+
+## Media Popup (Images, Video, Audio)
+
+A unified popup for editing all media types — images, video, and audio.
+
+### Edit Popup
+
+**Trigger:** Double-click on any media element (image, video, or audio)
+
+**Common fields (all media types):**
+- **Source** — File path or URL
+
+**Type-specific fields:**
+
+| Field | Image | Video | Audio |
+|-------|-------|-------|-------|
+| Alt text | Yes | — | — |
+| Title | — | Yes | Yes |
+| Poster | — | Yes | — |
+| Dimensions | Read-only | — | — |
+| Inline/Block toggle | Yes (not for linked images) | — | — |
+
+**Buttons:**
+- **Browse** — Pick file from filesystem
+- **Copy** — Copy source path to clipboard
+- **Delete** — Remove the media element
+
+**Shortcuts:**
+- `Mod + Shift + I` — Insert new image
+- `Enter` — Save changes
+- `Escape` — Close popup
+
+### Source Mode
+
+In Source mode, clicking on image syntax `![alt](path)` opens the same media popup.
+
+Source mode also shows a floating **preview** of the media — an image, or a video or audio player with native playback controls. It appears while the cursor is inside `![alt](path)` (with no text selected), and when the mouse hovers over the syntax; the cursor's preview wins over the hover one. The path must end in a recognized image, video or audio extension (or be a `data:image/` URL). The preview hides while the media popup is open.
+
+## Image Context Menu
+
+Right-clicking on an image in WYSIWYG mode opens a context menu with quick actions (separate from the double-click edit popup).
+
+**Trigger:** Right-click on any image
+
+**Actions:**
+| Action | Description |
+|--------|-------------|
+| Change Image | Open a file picker to replace the image |
+| Delete Image | Remove the image from the document |
+| Copy Path | Copy the image source path to clipboard |
+| Reveal in Finder | Open the image file location in your file manager (label adapts per platform) |
+
+Press `Escape` to dismiss the context menu without taking action.
+
+## Math Popup
+
+Edit LaTeX math expressions with live preview.
+
+**Trigger:**
+- **WYSIWYG:** Click on inline math `$...$`
+- **Source:** Place cursor inside a non-empty `$...$`, a `$$...$$` block, or a ` ```latex ` / ` ```math ` block
+
+**Fields:**
+- **LaTeX Input** — Edit the math expression
+- **Preview** — Real-time rendered preview
+- **Error Display** — Shows LaTeX errors with helpful syntax hints
+
+**Shortcuts:**
+- `Mod + Enter` — Save and close
+- `Click outside` — Save and close (commits your edits)
+- `Escape` — Cancel and close (discards your edits)
+- `Shift + Backspace` — Delete inline math (works even when non-empty, WYSIWYG only)
+- `Alt + Mod + M` — Insert new inline math
+
+::: tip Error Hints
+When you have a LaTeX syntax error, the popup shows helpful suggestions like missing braces, unknown commands, or unbalanced delimiters.
+:::
+
+::: info Source Mode
+Source mode provides the same editable math popup as WYSIWYG mode — a textarea for LaTeX input with a live KaTeX preview below it. The popup opens automatically when your cursor enters any math syntax (a non-empty `$...$`, `$$...$$`, or ` ```latex ` / ` ```math `). Press `Mod + Enter` to save or `Escape` to cancel. An empty `$$` typed at the end of a line is treated as plain text — likely a half-typed block-math delimiter — and does not open the popup.
+:::
+
+## Footnote Popup
+
+Edit footnote content inline.
+
+**Trigger:**
+- **WYSIWYG:** Hover over footnote reference `[^1]`
+- **Source:** Hover over or click a footnote reference or definition
+
+**Fields:**
+- **Content** — Multi-line footnote text (auto-resizing)
+- **Go to Definition** — Jump to footnote definition
+- **Delete** — Remove footnote
+
+**Behavior:**
+- New footnotes auto-focus the content field
+- Textarea expands as you type
+
+## Wiki Link Popup
+
+Edit wiki-style links for internal document connections.
+
+**Trigger:**
+- **WYSIWYG:** Hover over `[[target]]` (300ms delay)
+- **Source:** Click on wiki link syntax
+
+**Fields:**
+- **Target** — Workspace-relative path (`.md` extension handled automatically)
+- **Browse** — Pick file from workspace
+- **Open** — Open linked document
+- **Copy** — Copy target path
+- **Delete** — Remove wiki link
+
+## Table Context Menu
+
+Quick table editing actions.
+
+**Trigger:**
+- **WYSIWYG:** Right-click on a table cell (the same actions are also on the toolbar and have keyboard shortcuts)
+- **Source:** Right-click on a table cell
+
+**Actions:**
+| Action | Description |
+|--------|-------------|
+| Insert Row Above/Below | Add row at cursor |
+| Insert Column Left/Right | Add column at cursor |
+| Delete Row | Remove current row |
+| Delete Column | Remove current column |
+| Delete Table | Remove entire table |
+| Align Column Left/Center/Right | Set alignment for current column |
+| Align All Left/Center/Right | Set alignment for all columns |
+| Format Table | Auto-align table columns (prettify markdown) |
+| Fit to Width / Natural Width | WYSIWYG only: pin this table to the editor width with content-proportional columns, or return it to its natural width |
+
+## Spell Check Popup
+
+Fix spelling errors with suggestions.
+
+**Trigger:**
+- Right-click on misspelled word (red underline)
+
+**Actions:**
+- **Suggestions** — Click to replace with suggestion
+- **Add to Dictionary** — Stop marking as misspelled
+
+## Moving Text by Dragging
+
+In WYSIWYG mode you can move a selection with the mouse: press on the selected text, drag — a drop cursor shows where it will land — and release. The move is a single undoable step (`Mod + Z` puts it back). Press `Escape` while dragging, or let the window lose focus, to cancel. VMark implements this itself because the desktop shell intercepts the browser's native drag events, which is why it is a mouse gesture rather than system drag-and-drop.
+
+## Mode Comparison
+
+| Element | WYSIWYG Edit | Source |
+|---------|--------------|--------|
+| Link | Click / `Mod+K` / `Cmd+Click` to open | Click / `Mod+K` / `Cmd+Click` to open |
+| Image | Double-click | Click on `![](path)` |
+| Video | Double-click | — |
+| Audio | Double-click | — |
+| Math | Click | Cursor in math → popup |
+| Footnote | Hover | Direct edit |
+| Wiki Link | Hover | Click |
+| Table | Toolbar | Right-click menu |
+| Spell Check | Right-click | Right-click |
+
+## Popup Navigation Tips
+
+### Focus Flow
+1. Popup opens with first input focused
+2. `Tab` moves forward through fields and buttons
+3. `Shift + Tab` moves backward
+4. Focus wraps within popup
+
+### Quick Editing
+- For simple URL changes: edit and press `Enter`
+- For canceling: press `Escape` from any field
+- For multi-line content (footnotes, math): use `Mod + Enter` to save
+
+### Mouse Behavior
+- Click outside popup to close. Default behavior is **discard** unsaved
+  changes; the math popup is an exception and **commits** the edit on
+  click-outside (see the [Math Popup](#math-popup) section).
+- Hover popups (footnote, wiki) have 300ms delay before showing
+- Moving mouse back to popup keeps it open
+
+<!-- Styles in style.css -->

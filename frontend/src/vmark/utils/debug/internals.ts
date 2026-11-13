@@ -1,0 +1,89 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/utils/debug/internals.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Debug internals — shared by log/warn/error loggers.
+ *
+ * Purpose: Production warn/error sink that forwards to tauri-plugin-log
+ * (~/Library/Logs/app.vmark/ on macOS) while always keeping a console
+ * fallback. Consumers should import named loggers from `@/utils/debug`
+ * (the barrel); this module is the private plumbing.
+ *
+ * @coordinates-with @tauri-apps/plugin-log — production warn/error sink
+ * @module utils/debug/internals
+ */
+
+export const isDev = Boolean(import.meta.env?.DEV);
+
+// Production warn/error: forward to tauri-plugin-log for file persistence.
+// Lazy-loaded to avoid blocking startup; always falls back to console.
+let _tauriWarn: ((msg: string) => Promise<void>) | null = null;
+let _tauriError: ((msg: string) => Promise<void>) | null = null;
+
+// litemd: vmark 在这里懒加载 @tauri-apps/plugin-log。LiteMd 没有 Tauri，
+// 改为由宿主（frontend/src/host/）通过 setPersistentLogSink 注入写日志的实现；
+// 未注入时（单元测试、开发模式）只走 console。
+export function setPersistentLogSink(sink: {
+  warn: (msg: string) => Promise<void>;
+  error: (msg: string) => Promise<void>;
+} | null): void {
+  if (isDev) return;
+  _tauriWarn = sink ? sink.warn : null;
+  _tauriError = sink ? sink.error : null;
+}
+
+/** Serialize args preserving Error.stack and object structure. */
+export function formatArgs(tag: string, args: unknown[]): string {
+  const parts = [tag];
+  for (const a of args) {
+    if (a instanceof Error) {
+      parts.push(a.stack ?? a.message);
+    } else if (typeof a === "object" && a !== null) {
+      try {
+        parts.push(JSON.stringify(a) ?? Object.prototype.toString.call(a));
+      } catch {
+        // Circular or non-serialisable: name the KIND. `String(a)` here would
+        // push the literal "[object Object]" into a production log line.
+        parts.push(Object.prototype.toString.call(a));
+      }
+    } else {
+      parts.push(String(a));
+    }
+  }
+  return parts.join(" ");
+}
+
+/** Warn logger that persists to file in production. Always outputs to console as fallback. */
+export function prodWarn(tag: string, ...args: unknown[]) {
+  /* v8 ignore next 5 -- @preserve reason: isDev is always true in Vitest */
+  if (isDev) {
+    console.warn(tag, ...args);
+  } else {
+    console.warn(tag, ...args);
+    if (_tauriWarn) void Promise.resolve(_tauriWarn(formatArgs(tag, args))).catch((e) => { console.error("[Log] persist warn failed:", e); });
+  }
+}
+
+/**
+ * Build a tagged warn logger.
+ *
+ * Replaces ~50 copy-pasted `isDev ? console.warn : prodWarn` ternaries in
+ * `warn.ts`. `prodWarn` already branches on `isDev` (dev → console.warn only;
+ * prod → console.warn + tauri-plugin-log), so routing every logger through it
+ * is behavior-identical to the old per-logger ternary in both modes — the
+ * ternary carried no tree-shaking benefit here because warn loggers are never
+ * no-ops in production.
+ */
+export function createWarnLogger(tag: string): (...args: unknown[]) => void {
+  return (...args: unknown[]) => prodWarn(tag, ...args);
+}
+
+/** Error logger that persists to file in production. Always outputs to console as fallback. */
+export function prodError(tag: string, ...args: unknown[]) {
+  /* v8 ignore next 5 -- @preserve reason: isDev is always true in Vitest */
+  if (isDev) {
+    console.error(tag, ...args);
+  } else {
+    console.error(tag, ...args);
+    if (_tauriError) void Promise.resolve(_tauriError(formatArgs(tag, args))).catch((e) => { console.error("[Log] persist error failed:", e); });
+  }
+}

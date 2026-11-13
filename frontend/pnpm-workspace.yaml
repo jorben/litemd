@@ -10,6 +10,33 @@ minimumReleaseAgeExclude:
   - mygo-cli
   - "@egoist/mygo-cli-*"
 
-# 只允许确有需要的依赖执行安装脚本
-onlyBuiltDependencies:
-  - esbuild
+# 只允许确有需要的依赖执行安装脚本（pnpm 11 的写法；pnpm 10 为 onlyBuiltDependencies）
+allowBuilds:
+  esbuild: true
+
+# vmark 的依赖补丁（pnpm 格式原样迁入，技术方案 4.2 节）。补丁按「包名@精确版本」匹配，
+# 这些包都是间接依赖，用 overrides 钉在补丁对应的版本；升级时用 pnpm patch 重新生成。
+patchedDependencies:
+  micromark@4.0.2: patches/micromark@4.0.2.patch
+  mdast-util-from-markdown@2.0.3: patches/mdast-util-from-markdown@2.0.3.patch
+  mdast-util-to-markdown@2.1.2: patches/mdast-util-to-markdown@2.1.2.patch
+  micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch
+  mdast-util-find-and-replace@3.0.2: patches/mdast-util-find-and-replace@3.0.2.patch
+  prosemirror-view@1.42.8: patches/prosemirror-view@1.42.8.patch
+overrides:
+  micromark: 4.0.2
+  mdast-util-from-markdown: 2.0.3
+  mdast-util-to-markdown: 2.1.2
+  micromark-extension-gfm-autolink-literal: 2.1.0
+  mdast-util-find-and-replace: 3.0.2
+  prosemirror-view: 1.42.8
+  # 管线解析与序列化相关的包钉在 vmark@01bf9f4 锁文件里的版本：vmark 的管线测试、golden
+  # 和补丁都是按这组版本录制的，版本漂移会改变解析结果（M0 报告第 1 节）
+  mdast-util-gfm-autolink-literal: 2.0.1
+  mdast-util-gfm-strikethrough: 2.0.0
+  mdast-util-gfm-table: 2.0.0
+  mdast-util-gfm-task-list-item: 2.0.0
+  markdown-table: 3.0.4
+  prosemirror-transform: 1.12.4
+  prosemirror-schema-list: 1.5.1
+  prosemirror-changeset: 2.4.4

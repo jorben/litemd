@@ -1,0 +1,244 @@
+---
+vmark:
+  id: 019f758c-54ef-7043-93c8-921bc58c4c18
+---
+# Coherence & the Coherence Breakdown
+
+VMark's coherence layer keeps recursively developed writing projects
+honest: it records **which documents each AI generation actually read**,
+notices when those upstream documents change afterwards, and shows you —
+on demand — exactly which downstream artifacts might now be out of date.
+Nothing is ever auto-updated; you stay the editor-in-chief.
+
+## How it works (30 seconds)
+
+- **Provenance tracking is opt-in.** Turn on *Settings → Files & Images →
+  Saving → Stamp identity block on save* first. Until you do, no write —
+  a save, genie apply, accepted AI suggestion, MCP write, version restore,
+  or a new file from the file explorer — stamps your files or creates
+  `.vmark/`.
+- Once enabled, every save, genie apply, accepted AI suggestion, MCP write,
+  version restore, and workflow
+  `save-file` step is recorded as a **transformation** in a plain-text
+  ledger inside your workspace (`.vmark/` — git-friendly, human-readable
+  JSONL; deleting the derived `index.db` loses nothing).
+- **A workspace that already has a ledger** — a `.vmark/` you created
+  earlier, or one a collaborator committed — keeps recording writes to the
+  documents it tracks even with the setting off. A document counts as
+  tracked when the ledger has recorded it before, or when the file already
+  carries its own `vmark:` identity — a tracked file you moved, copied in or
+  checked out; the ledger's own scan adopts exactly those. It stamps
+  nothing: a document without an identity is left out, and a write whose
+  inputs are therefore incomplete is recorded as `inferred` rather than
+  `exact`.
+- When an AI writes a document while reading others, those reads become
+  **dependency edges**, pinned to the revision that was read. In-app
+  instrumented paths record `exact` inputs; an MCP write honestly records an
+  `inferred` read set — only what that same client read over its own
+  connection — and names the client that wrote it.
+- When an upstream document advances past a pinned revision, the edge
+  becomes **stale**. If two revisions evolved in parallel (e.g. on git
+  branches), the edge is **diverged** — surfaced, never guessed at.
+- Files edited outside VMark (terminal, other editors) are reconciled on
+  scan as *observed external edits* — history stays gap-free, honestly
+  marked as unknown-provenance.
+
+## The Coherence Breakdown panel
+
+Open it from **Window → Coherence Breakdown** (or the command palette:
+"Coherence Breakdown"). It is strictly **pull-based**: it refreshes when you
+open it or press refresh — it never nags in the background.
+
+Items are grouped by artifact (the downstream document) and show the
+upstream document, the pinned revision, and the current state:
+
+| State | Meaning |
+|---|---|
+| `version-stale` | The upstream advanced past what this artifact was built from |
+| `diverged` | The pinned and current revisions are parallel — no line of descent |
+| `diverged-multi-head` | The upstream itself has parallel current versions |
+| `waived` | You accepted the divergence, with a recorded reason |
+| `unpinnable` | The upstream can't be resolved (e.g. an invalid pin) |
+
+### Actions
+
+Each item offers three honest actions — none of them rewrites history:
+
+- **Accept newer** — records that the artifact is still compatible with
+  the newer upstream (a *ratification*). The item leaves the list; if the
+  upstream changes again, it comes back.
+- **Revise** — opens the artifact so you can update it. Saving a new
+  version retires the old edge.
+- **Waive** — records an intentional divergence with a **required
+  reason** (unreliable narrators exist). In v0, a waiver is intentionally narrow: it applies only to this edge and the specific upstream revision it resolves against. Waived items stay visible,
+  marked distinctly, and reopen if the upstream moves again. A waiver can
+  also take an optional expiry — a date (`YYYY-MM-DD`, meaning the end of
+  that day UTC) or a full timestamp. Once it passes, the waiver lapses and
+  the item reopens; a malformed expiry lapses at once, so the item never
+  stays silently waived.
+
+Accept-newer and waive are disabled when the upstream has multiple
+current versions — there is no single revision to resolve against;
+revise (or reconcile the versions) first.
+
+## Quieting flags you do not need
+
+Two controls on each Breakdown row narrow what the layer asks about. Both
+are human-only — no MCP tool can set them.
+
+**Mark finished (document lifecycle).** When a downstream document is done —
+a published chapter, a delivered report — choose **Mark finished** on any of
+its rows. It silences every dependency into that document, including ones not
+currently listed, which is why it asks for confirmation. Its edges move to the
+collapsed **Not Asking About These** group at the bottom of the panel, labelled
+*finished document*: still tracked, still visible on request, just no longer
+interrupting you. **Reopen** brings them back with a single click and no
+confirmation, since reopening only ever adds interruptions back. Lifecycle is
+recorded in the ledger, not in frontmatter, so marking a document finished does
+not create a new revision of it.
+
+**Section anchors.** An unanchored edge asks "did the upstream file change?".
+**Anchor to a section** narrows it to "did the section I depend on change?":
+pick a heading from the upstream document and the edge is pinned to that
+heading path. While the anchored section is unchanged, an upstream edit
+elsewhere leaves the edge in the suppressed group as *depended-on section
+unchanged*; an edit inside the section surfaces it as *anchored section
+changed*. If the heading disappears, the edge is flagged *anchor lost* rather
+than quietly reverting to whole-file behaviour. **Change anchor** re-pins it
+and **Whole file** clears it. Anchors are their own revisable ledger entries,
+so they follow the edge through later revisions.
+
+## The coherence log and flag judgment
+
+**Coherence Log** (a disclosure in the Breakdown panel) is the per-edge history
+the ledger holds: every check, ratification and waiver, how many times each
+edge has been resolved (*resolved 3x*), and how many edges have been resolved
+more than once — churn, which is the real burden of a noisy dependency graph.
+A semantic check the model answered below the confidence threshold is shown
+with its preserved verdict and confidence (*model said … at …, below
+threshold*), so "no signal" and "answered, but not confidently enough" stay
+distinguishable. The log is read from the whole ledger, so it loads only when
+you expand it and reloads on each expand.
+
+**Was this worth flagging?** Each surfaced row offers **Worth flagging?** with
+three answers — **Yes**, **No**, **Unsure** — and deliberately no default. Your
+answers are recorded as their own ledger entries and tallied in the log
+(*Judged relevant … · noise … · unsure … · unjudged …*). This is the
+staleness-relevance measure the layer is tuned against: a flag you judge noise
+is a candidate for a section anchor or a finished mark.
+
+## Semantic checking, claims, and contexts
+
+Version staleness says an upstream *moved*; semantic checking says whether
+that movement actually *contradicts* the derived document. Checks are
+**pull-only**: press **Check** on a stale edge and VMark asks your
+configured AI provider to compare the pinned upstream revision, the
+current one, and the derived text. The verdict lands as a badge — *checked
+valid*, *contradicted* (always with a verbatim evidence quote), or
+*unchecked* when the model was unsure, timed out, or answered below the
+confidence bar. Unknown is honest, never hidden. A check expires the
+moment either document moves again — or the claim set changes.
+
+**Canon claims** are facts you have made explicit ("Elena is
+left-handed"). Select text in a document and run *Extract Claim from
+Selection*: the claim is born a **draft** with provenance (which document,
+which revision). To see and manage your claims, run **Canon Claims** from the command palette — the panel has no menu item or shortcut, and *Extract Claim from Selection* opens it for you with the new draft. Promote a claim to **established** when it becomes canon —
+only established claims are fed to semantic checks. Correcting or retiring
+a claim appends history; nothing is ever deleted. Hiding a claim in a
+context is reversible visibility, not retirement.
+
+**Contexts** are named views of the workspace (the *default* context is
+always there). Each context selects what "current" means and which claims
+apply; a child context inherits its parent's claims additively. Contexts
+are **greenhouse** by default — check verdicts read as advisory tension.
+Flipping one to **enforcing** (an explicit, confirmed act) labels
+contradictions as canon violations. The Breakdown's context picker chooses
+which context you are looking through; check results are bound to the
+exact context and claim snapshot that produced them and never leak across.
+
+## Provenance, delegation, and branches
+
+Three things keep the coherence layer honest as a project actually
+evolves — none of them nag, all of them are pull-only.
+
+**Provenance recovery.** When you edit a derived document by hand (in
+VMark or an external editor), the edit correctly loses its recorded
+inputs — the old dependency edges no longer describe the new text. The
+Breakdown's *Provenance unknown* group offers to restore them: press
+**Suggest inputs** and VMark proposes the document's most recent prior
+input set (roles preserved), pre-checked and editable. **Confirm
+provenance** re-attaches the edges to the current version without
+creating a new revision, so the document's own downstreams never see a
+spurious change. Documents that never had inputs are never listed —
+there is nothing to recover and nothing to nag about.
+
+**Agent delegation.** By default only you can resolve stale edges. If
+you want an AI agent to accept-newer or waive on your behalf (through
+the `coherence_resolve` MCP tool), grant it a **time-limited
+delegation** from the Breakdown: name the agent, choose the scope
+(accept-newer and/or waive), set an expiry (7 days by default, never
+"forever"). Every delegated resolution is recorded against the grant, so
+the audit trail always shows who acted under whose authority. Revoke any
+grant with one click. Canon claims and contexts stay human-only — an
+agent can never promote a claim or enforce a context.
+
+**Branch contexts.** A context can be mapped to a git branch. When you
+check out a mapped branch, the Breakdown shows a **candidate chip**
+offering to switch — it never switches on its own. If the branch has no
+context yet, the chip offers to create one named after it. When a real
+(non-fast-forward) merge lands, a dismissible banner nudges you to
+review the Breakdown; the divergence and staleness it surfaces are the
+normal Breakdown states, so nothing new runs — you just get walked to
+the review.
+
+## Frontmatter identity
+
+Once *Stamp identity block on save* is on, the first time a file is
+captured VMark adds a small identity block to its frontmatter:
+
+```yaml
+vmark:
+  id: 018f3c7a-9f2e-7cc1-b302-5e9d4a6b21c7
+```
+
+This ID is how a document keeps its history across renames and moves. It
+never affects content hashing (adding it doesn't create a "change"), and
+everything else in your frontmatter is left untouched. If you copy a
+file, the duplicate ID is detected and surfaced for you to resolve —
+never auto-fixed.
+
+If you would rather VMark never touch your files, leave *Stamp identity
+block on save* off — that is the default. With it off, VMark adds this
+block to no file, however the file is written — including files an AI or
+MCP edit only read.
+
+## Git interoperability
+
+- `.vmark/` ledger files are git-tracked and merge cleanly across
+  branches (append-only, `merge=union`).
+- Checkouts, branch switches, and resets are recognized as **navigation**
+  — they never create phantom revisions.
+- `git revert` and merges that mint new content are captured as
+  git-attributed transformations.
+- The derived index (`index.db`) is gitignored and rebuilt from the
+  plain-text ledger whenever needed.
+
+## For AI agents (MCP)
+
+External agents can query coherence state through the
+[`coherence` MCP tool](/guide/mcp-tools#coherence) (`status`, `edges`,
+`claims`, and `contexts` actions), for workspaces you have opened in
+VMark. `status` is a pure read; `edges` reconciles first — it may append
+provenance records to the workspace's own ledger, but never touches your
+documents. The tool declares `readOnlyHint: true`, so a client may
+auto-approve it.
+
+Resolution (ratify/waive) lives in a **separate** tool,
+[`coherence_resolve`](/guide/mcp-tools#coherence-resolve), and stays with
+the human by default: an agent can only call it after you grant that
+specific agent a time-limited delegation, and every resolution is
+audit-logged against the grant. Keeping it out of `coherence` is what
+lets the read tool be auto-approved without an agent silently acquiring
+the ability to write to your ledger.
+
+Canon claims and contexts are never mutable over MCP at all.

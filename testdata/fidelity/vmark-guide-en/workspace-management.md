@@ -1,0 +1,327 @@
+# Workspace Management
+
+A workspace in VMark is a folder opened as the root of your project. When you open a workspace, the sidebar shows a file tree, Quick Open can find every file the file tree shows, the terminal starts in the project root, and your open tabs are remembered for next time.
+
+Without a workspace you can still open individual files, but you lose the file explorer, in-project search, and session restore.
+
+::: tip Multiple workspaces in one window
+The experimental [workspace rail](/guide/workspace-rail) lets a single window hold several workspaces and switch between them — each with its own tabs, file tree, and layout.
+:::
+
+## Opening a Workspace
+
+| Method | How |
+|--------|-----|
+| Menu | **File > Open Workspace** |
+| Quick Open | `Mod + O`, then select **Browse...** at the bottom |
+| Drag and drop | Drag a markdown file from Finder into the window — VMark detects its project root and opens the workspace automatically |
+| Recent Workspaces | **File > Recent Workspaces** and pick a previous project |
+
+When you open a workspace, VMark shows the sidebar with the file explorer. If the workspace was opened before, previously open tabs are restored.
+
+On Windows and Linux, a folder passed on the command line (`vmark C:\notes` or `vmark ~/notes`) opens as a workspace in its own window, as dropping a folder on the Dock icon does on macOS. This also works when VMark is already running.
+
+::: tip
+If the current window has unsaved changes, VMark offers to open the workspace in a new window instead of replacing your work.
+:::
+
+## File Explorer
+
+The file explorer appears in the sidebar whenever a workspace is open. It shows a tree of markdown files rooted at the workspace folder.
+
+### Navigation
+
+- **Single-click** a folder to expand or collapse it
+- **Single-click** a file to open it in a tab
+- **Enter** (or `F2`) on a selected item starts renaming it inline
+- Files VMark does not edit itself (visible with **Show All Files**) open with your system's default application
+- Folders start collapsed when a workspace is first opened; their open state is preserved while you switch between the Files, Outline, and History views
+
+### Quick Look
+
+Select a file in the tree and press `Space` to preview it in a full-window overlay without opening a tab — images, video and audio render with their native controls; any other file shows a "cannot preview" panel with a button to open it externally. `←`/`↑` and `→`/`↓` step through the tree's visible files in order (no wrap), and `Space`, `Escape` or a click on the backdrop closes the preview. Typing a space in the inline rename field never triggers it.
+
+### Header Buttons
+
+The Files-view header carries the tree-wide controls:
+
+- **Expand All Folders** — opens every folder in the tree
+- **Collapse All Folders** — closes every folder back to the root
+- **Show All Files** — a toggle; when it is on (highlighted), the tree lists
+  every file rather than only the ones VMark can open
+- **New File** / **New Folder** — create inside the selected folder, or the
+  workspace root when nothing is selected
+
+### File Operations
+
+Right-click a file, a folder, or the empty space below the tree to access the context menu:
+
+| Action | Shown for | Description |
+|--------|-----------|-------------|
+| Open | Files | Open the file in a new tab |
+| Rename | Files, folders | Edit the file or folder name inline (also `F2`) |
+| Duplicate | Files | Create a copy of the file |
+| Move to… | Files | Move the file to a different folder via a dialog |
+| Delete | Files, folders | Move the file or folder to the system trash |
+| Copy Path | Files, folders | Copy the absolute path to the clipboard |
+| Reveal in Finder | Files, folders | Show the item in your file manager — labelled **Show in Explorer** on Windows and **Show in File Manager** on Linux |
+| New File | Folders, empty space | Create a new markdown file in this location |
+| New Folder | Folders, empty space | Create a new folder in this location |
+| Open Terminal Here | Folders | Start a new terminal session in this folder (disabled once 5 sessions are open) — see [Terminal](/guide/terminal) |
+
+You can also **drag and drop** files between folders directly in the tree.
+
+### Visibility Toggles
+
+By default the explorer shows only the file types VMark can open, and hides dotfiles.
+**Folders are listed whether or not they contain anything visible**, so a project of
+unsupported file types looks like a tree of empty folders — that is the filter at work,
+not a failure to read the directory. Two toggles change this:
+
+| Toggle | Shortcut | What it does |
+|--------|----------|-------------|
+| Show Hidden Files | `Mod + Shift + .` (macOS) / `Ctrl + H` (Win/Linux) | Reveals dotfiles and hidden folders |
+| Show All Files | `Mod + Shift + A` | Shows non-markdown files alongside your documents |
+
+Both settings are saved per-workspace and persist across sessions.
+
+### Excluded Folders
+
+Some directories are never listed into, whatever the workspace settings say — the
+same floor the workspace search applies: `.git`, `node_modules`, `.obsidian`,
+`.svn`, `__pycache__`, `.DS_Store`, `.vscode`, `.idea`, `target`, `.next`,
+`dist`, `.superpowers`. They still appear as folders so you know they exist; their
+contents are not read. Add your own names under **Exclude folders** in the
+workspace settings (a new workspace starts with `.git` and `node_modules` there).
+
+The tree is listed in one pass and refreshed when files change. A burst of
+changes refreshes it once, shortly after the burst ends; a folder that never
+stops changing (an in-progress download, a build, a sync) refreshes on a
+widening interval instead of continuously, so the explorer never pins a CPU core
+re-reading a busy workspace.
+
+## Quick Open
+
+Press `Mod + O` to open the Quick Open overlay. It provides fuzzy search across three sources, listed in this order:
+
+1. **Open tabs** in the current window (marked with a dot indicator), most recently used first
+2. **Recent files** you have opened before
+3. **Every file the file explorer is currently showing** in the workspace
+
+Before you type, the list shows only open tabs and recent files. Once you type, results from all three sources appear, grouped in that order and ranked by match quality within each group.
+
+Type a few characters to filter — matching is fuzzy, so `rme` finds `README.md`. Use arrow keys to navigate and **Enter** to open. A pinned **Browse...** row at the bottom opens a file dialog.
+
+The third source follows the file explorer exactly, so the two never disagree
+about what exists. Turn on **Show hidden files** and Quick Open finds documents
+under `.claude/`, `.github/workflows/` and any other dot-directory; turn on
+**Show all files** and it finds the non-markdown ones too, opening each the same
+way a click in the sidebar would — VMark's own formats in a tab, everything else
+in your system's default application. Folders on the always-skipped list
+(`.git`, `node_modules`, `.vscode`, and the rest) stay out of both.
+
+| Action | Shortcut |
+|--------|----------|
+| Open Quick Open | `Mod + O` |
+| Navigate results | `Up / Down` |
+| Open selected file | `Enter` |
+| Close | `Escape` |
+
+::: tip
+Without a workspace, Quick Open still works — it shows recent files and open tabs but cannot search the file tree.
+:::
+
+## Workspace Content Search
+
+When a workspace is open, VMark can search across **file contents** (not just filenames). By default it searches the file types VMark opens (Markdown, plain text, YAML, and JSON/TOML/Mermaid/SVG/HTML when their format support is on). Turn off the **.md** toggle (**Supported File Types Only**) to search every text file (binaries are always skipped).
+
+| Action | Shortcut |
+|---|---|
+| Open content search panel | `Mod + Shift + H` (also **Edit → Find → Find in Files**) |
+| Jump to next result | `Enter` (or arrow keys to navigate) |
+| Open result in new tab | Click the match preview |
+
+Each result shows the file path, line number, and a snippet with the matching text highlighted. Results are not ranked: files are listed in the order the search reaches them while walking the workspace folders. A search stops after 50 matching files, 1,000 matches or 5 seconds, and shows what it found up to that point.
+
+**Excluded by default**: the folders VMark never descends — `.git`, `node_modules`, `.obsidian`, `.svn`, `__pycache__`, `.DS_Store`, `.vscode`, `.idea`, `target`, `.next`, `dist`, `.superpowers` — plus any names in **Exclude folders** in Workspace Settings (a new workspace starts with `.git` and `node_modules` there).
+
+**Hidden files**: dotfiles are always skipped by content search, whatever the file explorer's **Show hidden files** toggle says.
+
+This is distinct from [Quick Open](#quick-open) which searches *filenames* only — content search opens the matched file with the cursor placed at the matching line.
+
+## Recent Workspaces
+
+VMark remembers up to 10 recently opened workspaces. Access them from **File > Recent Workspaces** in the menu bar.
+
+- Workspaces are sorted by last-opened time (most recent first)
+- The list syncs to the native menu on every change
+- Choose **Clear Recent Workspaces** to reset the list
+
+## Workspace Settings
+
+Each workspace has its own configuration that persists between sessions. Settings are stored in the VMark application data directory — not inside the project folder — so your workspace stays clean.
+
+The following settings are saved per workspace:
+
+| Setting | Description |
+|---------|-------------|
+| Excluded folders | Folders hidden from the file explorer |
+| Show hidden files | Whether dotfiles are visible |
+| Show all files | Whether non-markdown files are visible |
+| Last open tabs | File paths for session restore on next open |
+
+::: tip
+Workspace configuration is tied to the folder path. Opening the same folder on the same machine always restores your settings, even from a different window.
+:::
+
+## Empty Workspace Window
+
+Closing the last open document no longer closes the window. Instead, the window stays open on a **Welcome screen**, and — if you have a workspace open — its sidebar and file tree remain visible. This works the same way on macOS, Windows, and Linux.
+
+The Welcome screen offers quick actions to get back to work:
+
+- **New File**, **Open File**, and **Open Workspace…** buttons
+- A **Recent Files** list and a **Recent Workspaces** list — click any entry to
+  reopen it. Each list appears only when it has entries.
+
+**Open File** and the recent lists reuse the window you are already in. A
+Welcome-screen window has no tabs to displace, so nothing opens in a second
+window — unless the window still has a workspace open, in which case a file from
+outside that workspace gets its own window rather than replacing the file tree
+you can still see in the sidebar.
+
+The title bar of a Welcome-screen window reads **VMark**: there is no document
+open, so there is no file name to show.
+
+To close the window itself, use the red traffic-light button, `Cmd/Ctrl + Q` (quit), or press `Cmd/Ctrl + W` again while the Welcome screen is showing.
+
+## Side-by-Side Documents
+
+Open two **different** documents at once — split the editor into two panes, each
+with its own document. Useful for bilingual reading/translation (original on one
+side, translation on the other) or keeping a reference open while you write.
+This is distinct from **Markdown Split View** (`Shift + F6`), which is the
+source + preview of the *same* file.
+
+- Toggle the split with **`Alt + Mod + \`** or the command palette
+  (**Split Editor — Two Documents**). The current document stays in one pane
+  and the document you used most recently before it (or, if there is none, another open document) opens in the other — the
+  same document is never shown twice, so the split needs two documents open.
+  Click a tab while a pane is focused to change that pane's document, or
+  right-click a tab and choose **Open to the Side**.
+- Drag the divider (or focus it and use the arrow keys) to resize the panes.
+- The pane you're editing is the **focused** pane — the toolbar, find bar, and
+  menu commands act on it.
+- Turn on **Sync Scroll Between Split Panes** (command palette) to scroll both
+  sides together proportionally — handy for lining up a translation.
+
+## Session Restore
+
+When you close a window that has a workspace open, VMark saves the list of open tabs to the workspace config. The next time you open the same workspace, those tabs are restored automatically.
+
+- Only tabs with a saved file path are restored (untitled tabs are not persisted)
+- If a file has been moved or deleted since the last session, it is silently skipped
+- Session data is saved on window close and on workspace close (`File > Close Workspace`)
+
+## Multi-Window
+
+Each VMark window can have its own independent workspace. This lets you work on multiple projects simultaneously.
+
+- **File > New Window** opens a fresh window
+- Opening a workspace in a new window does not affect other windows
+- Window size and position are remembered per window
+
+When you drag a markdown file from Finder and the current window already has unsaved work, VMark opens the file's project in a new window automatically.
+
+### Opening a file from outside the current workspace
+
+A window with a workspace open keeps that workspace. Opening a file that lives
+somewhere else — from Finder or Explorer, from `File > Open`, or from Recent
+Files — opens it in a **new window** rooted at its own folder, so the file tree
+you were working in stays where it is. Only a window with no workspace of its
+own takes the file in place.
+
+On Windows and Linux, double-clicking a file whose type is associated with
+VMark now hands it to the VMark you already have running instead of starting a
+second copy. macOS has always worked this way.
+
+### Detaching Tabs into New Windows
+
+You can pull a tab out of its window to create a new one:
+
+- **Drag a tab out of the tab bar** — more than about 40 px above or below it — to detach it. Release it over another VMark window to move the tab into that window; release it anywhere else to open it in a new window at the pointer
+- **Drag a tab horizontally** within the tab bar to reorder it among other tabs
+- Pinned tabs cannot be dragged
+
+A toast confirms the move and offers **Undo**, which brings the tab back. Browser tabs and the last tab of the main window cannot be dragged out; they snap back instead.
+
+The gesture is direction-locked: horizontal movement starts a reorder, while vertical movement triggers a detach. You can switch from reorder to detach mid-drag by moving the pointer outside the tab bar.
+
+### Window Status Panel
+
+When you run Claude Code across several windows, **View > Toggle Window Status** (also in the command palette, or press `Ctrl + Shift + 5`) opens a panel that lists every other open window with its live status and lets you jump straight to it.
+
+Each row shows the window's document name and its current status:
+
+| Status | Meaning |
+|--------|---------|
+| **Needs attention** | A terminal in that (unfocused) window rang the bell — Claude Code rings it when a turn finishes or it's waiting for you |
+| **Running** | A VMark AI genie is currently running in that window |
+| **Error** | The last AI genie run failed |
+| **Idle** | Nothing running |
+
+Rows are ranked attention-first, so the window that needs you sits at the top. Click any row to focus and raise that window; focusing a window clears its "needs attention" flag. The status is sourced from two reliable signals — VMark's own AI-genie invocation state and the terminal bell — not by parsing terminal output.
+
+**Pin the panel** to use it as persistent "mission control": while pinned, clicking a row focuses the target window but leaves the panel open, so you can bounce between several windows without reopening it. The pin button in the header opens a small menu with two scopes:
+
+- **Pin this window** — pins the panel in the current window only. Its open and pinned state is remembered per window across restarts, so a window you set up as your dashboard stays that way.
+- **Pin all windows** — a global pin: every window auto-opens the panel and behaves as pinned, *including windows you open later*, so you opt into the mission-control layout once instead of setting up each window by hand. Turning it off reverts every window to its own per-window pin state.
+
+## External Changes
+
+VMark watches your workspace for changes made by other programs (Git, external editors, build tools, etc.) and keeps open documents in sync.
+
+- **Unmodified files** are reloaded automatically when their contents change on disk. A brief toast notification confirms the reload.
+- **Files with unsaved changes** trigger a prompt dialog with three options: **Save As** (save your version to a new location), **Reload** (discard your changes and load from disk), or **Keep** (preserve your edits and mark the file as divergent).
+- **Deleted files** are marked as missing in their tab but not closed — you can still save the content to a new location.
+- When multiple dirty files change at once (e.g., after a `git checkout`), VMark batches them into a single dialog so you can reload all, keep all, or review each file individually.
+- If a divergent file's disk content later matches what you have in the editor (e.g., a `git checkout` restores the same text), VMark auto-clears the divergent state so normal auto-save resumes.
+
+VMark filters out its own saves so you are never prompted by changes you made within the app.
+
+## macOS Dock Recent Documents
+
+Documents you open in VMark are registered with macOS, so they appear in the **Open Recent** submenu when you right-click the VMark icon in the Dock.
+
+## Terminal Integration
+
+The integrated terminal automatically uses the workspace root as its working directory. When you open or switch workspaces, idle terminal sessions `cd` to the new root. A session that is busy running a command is left alone and changes directory once the command finishes (this needs shell integration to tell when it is busy). With the [workspace rail](/guide/workspace-rail) on, a session that belongs to one workspace keeps its own directory.
+
+The `VMARK_WORKSPACE` environment variable is set to the workspace path in every terminal session, so your scripts can reference the project root.
+
+[Learn more about the terminal →](/guide/terminal)
+
+## Shell CLI Command
+
+VMark can install a `vmark` shell command so you can open files and folders from the terminal.
+
+### Installing and removing
+
+**Help → Shell Command: Install 'vmark' in PATH…** is a single item that toggles. When no `vmark` command is installed, it writes a small launcher script to `/usr/local/bin/vmark` and asks for your administrator password (the same approach VS Code uses for its `code` command). When VMark's own script is already there, the same item removes it. A dialog reports the outcome either way. macOS only.
+
+### Usage
+
+```bash
+# Open a file
+vmark README.md
+
+# Open a folder as a workspace
+vmark ~/projects/my-blog
+
+# Open multiple files
+vmark chapter1.md chapter2.md
+```
+
+The command delegates to `open -b app.vmark`, so macOS handles single-instance behavior — files open in your existing VMark window rather than spawning a new process.
+
+If the file at `/usr/local/bin/vmark` was not written by VMark, the item touches nothing and asks you to remove it manually.

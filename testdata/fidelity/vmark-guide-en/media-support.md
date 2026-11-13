@@ -1,0 +1,168 @@
+# Media Support
+
+VMark supports video, audio, and YouTube embeds in your Markdown documents using standard HTML5 tags.
+
+## Supported Formats
+
+### Video
+
+| Format | Extension |
+|--------|-----------|
+| MP4 | `.mp4` |
+| WebM | `.webm` |
+| MOV | `.mov` |
+| AVI | `.avi` |
+| MKV | `.mkv` |
+| M4V | `.m4v` |
+| OGV | `.ogv` |
+
+### Audio
+
+| Format | Extension |
+|--------|-----------|
+| MP3 | `.mp3` |
+| M4A | `.m4a` |
+| OGG | `.ogg` |
+| WAV | `.wav` |
+| FLAC | `.flac` |
+| AAC | `.aac` |
+| Opus | `.opus` |
+
+## Syntax
+
+### Video
+
+Use standard HTML5 video tags:
+
+```html
+<video src="path/to/video.mp4" controls></video>
+```
+
+With optional attributes:
+
+```html
+<video src="video.mp4" title="Demo" poster="thumbnail.jpg" controls></video>
+```
+
+### Audio
+
+Use standard HTML5 audio tags:
+
+```html
+<audio src="path/to/audio.mp3" controls></audio>
+```
+
+### YouTube Embeds
+
+Use privacy-enhanced YouTube iframes:
+
+```html
+<iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID" width="560" height="315" frameborder="0" allowfullscreen></iframe>
+```
+
+### Vimeo Embeds
+
+Use Vimeo player iframes:
+
+```html
+<iframe src="https://player.vimeo.com/video/VIDEO_ID" width="560" height="315" frameborder="0" allowfullscreen></iframe>
+```
+
+You can also paste a Vimeo URL directly (e.g., `https://vimeo.com/123456789`) and VMark will automatically convert it to an embed.
+
+Unlisted Vimeo videos are supported too: paste the unlisted share link (`https://vimeo.com/123456789/abcdef1234` or a URL with `?h=…`) and VMark preserves the privacy hash the embed needs to play.
+
+### Bilibili Embeds
+
+Use the Bilibili player iframe with a BV ID:
+
+```html
+<iframe src="https://player.bilibili.com/player.html?bvid=BV1xxxxxxxxx" width="560" height="350" frameborder="0" allowfullscreen></iframe>
+```
+
+Paste a Bilibili video URL (e.g., `https://bilibili.com/video/BV1xxxxxxxxx`) and VMark will convert it to an embed automatically. Note that short URLs (`b23.tv`) are not supported since they require redirect resolution.
+
+### Image Syntax Fallback
+
+You can also use image syntax with media file extensions — VMark automatically promotes them to the correct media type:
+
+```markdown
+![](video.mp4)
+![](audio.mp3)
+```
+
+## Inserting Media
+
+### Toolbar
+
+Use the Insert menu in the toolbar:
+
+- **Video** — opens a file picker for video files, copies to `.assets/`, inserts a `<video>` tag
+- **Audio** — opens a file picker for audio files, copies to `.assets/`, inserts an `<audio>` tag
+- **YouTube** — reads a YouTube URL from the clipboard and inserts a privacy-enhanced embed
+- **Vimeo** and **Bilibili** — paste a video URL directly into the editor and VMark auto-detects the provider
+
+### Drag & Drop
+
+Drag video or audio files from your file system directly into the editor. VMark will:
+
+1. Copy the file to the document's `.assets/` folder
+2. Insert the appropriate media node with a relative path
+
+### Source Mode
+
+In Source mode, type the HTML tags directly. Media tags are highlighted with colored left borders:
+
+- **Video** — teal border
+- **Audio** — indigo border
+- **YouTube** — red border
+- **Vimeo** — blue border
+- **Bilibili** — pink border
+
+### Smart Paste in Source Mode
+
+Pasting into Source mode does the markdown-correct thing rather than dumping raw text:
+
+- **An image path** — or several, from a multi-file copy in Finder or Explorer — is validated, copied into the document's assets folder and inserted as `![](relative-path)`. When a paste is ambiguous, a small confirmation toast asks first
+- **A screenshot or copied image** (binary image data on the clipboard) is saved into the assets folder and inserted the same way
+- **A URL pasted over selected text** becomes a link: `[selected text](https://…)`
+- **HTML or Markdown copied from another app** is converted and cleaned before it lands — except inside a fenced code block, where pasted text stays verbatim
+- **Image files dragged from Finder or Explorer** into the source editor are copied and inserted too
+
+The conversion follows **Settings → Markdown → Clipboard paste handling** (`Smart` is the default; the other modes opt out), and files are copied into the assets folder while **Settings → Files & Images → Copy to assets folder** is on (the default).
+
+## Editing Media
+
+Double-click any media element in WYSIWYG mode to open the media popup:
+
+- **Source path** — edit the file path or URL
+- **Title** — optional title attribute
+- **Poster** (video only) — thumbnail image path
+- **Remove** — delete the media element
+
+Press `Escape` to close the popup and return to the editor.
+
+## Path Resolution
+
+VMark supports three types of media paths:
+
+| Path Type | Example | Behavior |
+|-----------|---------|----------|
+| Relative | `./assets/video.mp4` | Resolved relative to the document's directory |
+| Parent-relative | `../images/photo.png` | Resolved relative to the document's directory, walking up as many levels as the path asks for |
+| Absolute | `/Users/me/video.mp4` | Used directly via Tauri asset protocol |
+| External URL | `https://example.com/video.mp4` | Loaded directly from the web |
+
+Relative paths are recommended — they keep your documents portable across machines.
+
+A shared assets folder beside your notes works as written — `notes/report.md`
+can reference `../images/photo.png`. (Before 0.9.79 these rendered as broken
+placeholders.)
+
+## Security
+
+- A media path may not carry a URI scheme (`javascript:`, `file:`, or a custom one); such sources are refused rather than loaded
+- A relative path that names a directory (`.`, `..`, `assets/`) is not loaded. The video/audio blocks refuse it outright. Inline images hand it back unchanged, and the webview resolves it against the app origin, so it never reaches the disk. A home-relative path (`~/…`) is treated the same way
+- Absolute paths are not restricted by the path rules. Any absolute path inside the asset scope is displayed: your home folder, `/Volumes`, `/mnt` and `/media` (plus drives `C:`–`F:` on Windows), and folders granted at runtime. A document can therefore show any readable image in those places by writing its full path. Pasting an image with **Copy to assets folder** off writes such an absolute path. This is also why a relative path may use `..`: it reaches nothing an absolute path could not already reach
+- Video embeds load from three hosts only: `www.youtube-nocookie.com` (YouTube's privacy-enhanced player), `player.vimeo.com`, and `player.bilibili.com`. A YouTube link, or an iframe written with `youtube.com`, is embedded through the privacy-enhanced host. VMark's content security policy lets a frame load from these hosts and from no other site
+- Other iframe sources are stripped by the sanitizer
