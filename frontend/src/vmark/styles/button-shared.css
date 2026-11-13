@@ -1,0 +1,168 @@
+/* Migrated from xiaolai/vmark@01bf9f4 src/styles/button-shared.css
+   Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md). */
+/**
+ * Shared button primitive.
+ *
+ * VMark had 90 bespoke button classes against 2 canonical ones
+ * (`.popup-icon-btn`, `.universal-toolbar-btn`), so every feature re-derived
+ * "a bordered secondary button" from the token catalogue by hand — and they
+ * disagreed. Four independent implementations of the same control used four
+ * different paddings, three radii, two font sizes, and three different ways to
+ * spell a 1px border. The result is visible drift between panels that are
+ * supposed to look identical.
+ *
+ * One of those three spellings is now gone: `--space-px`, a SPACING token, was
+ * used as a border width in eleven declarations across nine files and is
+ * `--border-thin` everywhere it means a border. Same 1px either way, which is
+ * exactly why it survived — the token gate matches on VALUE, so it never
+ * objected. Property-to-token is the rule; value-to-token is the trap.
+ *
+ * `.vm-btn` is the canonical text button. Reach for it before writing a new
+ * `__btn` class; `scripts/check-bespoke-buttons.mjs` ratchets the bespoke count
+ * down so the sprawl cannot grow again.
+ *
+ * Not a replacement for the two existing canonical classes, which cover
+ * different shapes:
+ *   - `.popup-icon-btn`        icon-only square buttons inside popups
+ *   - `.universal-toolbar-btn` the editor toolbar's own button
+ *
+ * Focus follows rule 33's "standalone button" pattern (a visible outline),
+ * which is the sanctioned treatment for action buttons outside popups.
+ */
+
+.vm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-1);
+  /* 6px 12px. The semantic scale has no 6px step, so the vertical value comes
+     from the primitive layer (rule 31 sanctions that when no semantic token
+     covers the case). 4px/8px reads as cramped at this font size. */
+  padding: var(--space-1-5) var(--space-3);
+  /* Elevated base: findability by ELEVATION —
+     a raised --surface-raised face, an 8%-text-ink hairline and --shadow-sm —
+     replacing the outline-on-grey recipe, which read as hard to find. Ratified
+     for the welcome front door first, then rolled out to every .vm-btn. */
+  border: var(--border-thin) solid color-mix(in srgb, var(--text-color) 8%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-color);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+
+/* Hover deepens the face by mixing in text ink — a translucent --hover-bg
+   over a raised opaque face would just grey it back toward the page. Press
+   drops the shadow: the button visibly sits down. */
+.vm-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-color) 4%, var(--surface-raised));
+}
+
+.vm-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text-color) 8%, var(--surface-raised));
+  box-shadow: none;
+}
+
+.vm-btn:disabled {
+  opacity: var(--opacity-disabled);
+  box-shadow: none; /* a floating disabled control reads as pressable */
+  cursor: not-allowed;
+}
+
+.vm-btn:focus-visible {
+  outline: var(--border-medium) solid var(--primary-color);
+  outline-offset: var(--border-medium);
+}
+
+/* Compact size for dense rows (Settings). Promoted onto the primitive
+   (rule 32's middle path) rather than left as per-wrapper utilities, so the
+   compact recipe exists exactly once. */
+.vm-btn--compact {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+/* Capsule shape (maintainer direction — the welcome front door).
+   Promoted onto the primitive (rule 32's middle path) so a pill-shaped action
+   exists exactly once: a per-wrapper border-radius override would register as
+   shape drift in check-bespoke-buttons' maxShapeDriftClasses, and rightly so. */
+.vm-btn--pill {
+  border-radius: var(--radius-pill);
+}
+
+/* Emphasised action (confirm, start, submit). */
+.vm-btn--primary {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.vm-btn--primary:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+/* Solid call-to-action: the single most prominent control in a dialog.
+ *
+ * Stronger than `--primary` on purpose, and the difference is an accessibility
+ * decision, not a taste one. The workflow approval dialog originally drew its
+ * approve button as `--accent-bg` plus blue text; that fell to ~4.3:1 contrast,
+ * below WCAG AA, and inverted the usual pattern where the CTA is the most
+ * prominent control AT REST rather than on hover. Solid fill fixes both.
+ *
+ * Reach for `--primary` for ordinary emphasis. Reach for this only where one
+ * action is unambiguously the point of the surface. */
+.vm-btn--cta {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--contrast-text);
+  font-weight: 600;
+}
+
+/* Holds the fill on hover — the base `.vm-btn` hover would otherwise swap it
+   for `--hover-bg` and drop the contrast this variant exists to guarantee. */
+.vm-btn--cta:hover:not(:disabled) {
+  background: var(--accent-primary);
+  color: var(--contrast-text);
+  opacity: var(--opacity-mostly-opaque);
+}
+
+/* Destructive action (delete, deny, stop). */
+/* Chromeless variant: a disclosure/section toggle that must read as a heading,
+   not as an action. No border or fill, so it does not compete with the real
+   buttons beside it — but it is still the canonical primitive, so padding,
+   font and focus behaviour stay in one place instead of being re-invented per
+   panel. Focus is an underline (rule 33: focus must be a shape change, not a
+   colour change alone). */
+.vm-btn--plain {
+  padding: var(--spacing-1) 0;
+  border: none;
+  background: transparent;
+  box-shadow: none; /* the chromeless variant must not float */
+  color: var(--text-secondary);
+}
+
+.vm-btn--plain:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-color);
+}
+
+.vm-btn--plain:focus-visible {
+  outline: none;
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.vm-btn--danger {
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.vm-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error-color) 10%, transparent);
+}

@@ -1,0 +1,124 @@
+/* Migrated from xiaolai/vmark@01bf9f4 src/plugins/mermaid/mermaid-panzoom.css
+   Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md). */
+/**
+ * Mermaid Pan+Zoom Styles
+ *
+ * Container overflow/position set via inline style in mermaidPanZoom.ts
+ * to avoid CSS specificity fights.
+ */
+
+/* Reset button — top-right, appears on hover */
+.mermaid-panzoom-reset {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-base), background var(--duration-base), color var(--duration-base);
+  z-index: var(--z-resize-handle);
+}
+
+.panzoom-enabled:hover .mermaid-panzoom-reset {
+  opacity: 1;
+}
+
+.mermaid-panzoom-reset:hover {
+  background: var(--hover-bg);
+  color: var(--text-color);
+}
+
+/* Focus: U-shaped underline per 33-focus-indicators */
+.mermaid-panzoom-reset:focus-visible {
+  outline: none;
+  opacity: 1;
+}
+
+.mermaid-panzoom-reset:focus-visible::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--accent-primary);
+  border-radius: 1px;
+}
+
+.mermaid-panzoom-reset svg {
+  width: var(--size-icon-xs);
+  height: var(--size-icon-xs);
+}
+
+/* Export button — to the left of reset. The square is canonical
+   `.vm-icon-btn--sm`; this residual owns only the overlay
+   placement and the reveal-on-hover. `.mermaid-export-btn` stays in the DOM
+   as the pan-zoom hit-test hook. */
+.mermaid-export-overlay {
+  position: absolute;
+  top: 8px;
+  right: 40px; /* 8 + 24 (reset) + 8 gap */
+  opacity: 0;
+  transition: opacity var(--duration-base), background var(--duration-base), color var(--duration-base);
+  z-index: var(--z-resize-handle);
+}
+
+.panzoom-enabled:hover .mermaid-export-overlay {
+  opacity: 1;
+}
+
+.mermaid-export-overlay:focus-visible {
+  opacity: 1;
+}
+
+/* Theme picker menu — fixed to escape overflow:hidden container */
+/* Surface chrome comes from `.vm-menu` (overlay-shared.css). */
+.mermaid-export-menu {
+  z-index: var(--z-popup);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  min-width: 100px;
+  padding: var(--space-1);
+}
+
+.mermaid-export-menu-item {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  white-space: nowrap;
+}
+
+.mermaid-export-menu-item:hover {
+  background: var(--hover-bg);
+}
+
+/* Focus: background highlight per 33-focus-indicators (list item pattern) */
+.mermaid-export-menu-item:focus-visible {
+  outline: none;
+  background: var(--accent-bg);
+}
+
+.mermaid-export-menu-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: var(--border-thin) solid var(--border-color);
+}

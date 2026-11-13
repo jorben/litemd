@@ -378,3 +378,51 @@ func SaveAsUTF8(w *mygo.Window, d *Document) error {
 	d.Close()
 	return OpenPath(target)
 }
+
+// SaveAs：「另存为…」（文件被删除时的提示条等）。先收齐。
+func (s Service) SaveAs(ctx context.Context) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	FlushWindow(mygo.CallerWindow(ctx))
+	if err := e.doc.SaveAs(""); err != nil && !errors.Is(err, mygo.ErrCanceled) {
+		return err
+	}
+	return nil
+}
+
+// Duplicate：「存储副本」（只读文件提示条）。
+func (s Service) Duplicate(ctx context.Context) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	e.doc.Duplicate()
+	return nil
+}
+
+// DiscardRecovered：恢复提示条「丢弃，载入磁盘版本」（技术方案 3.3 节，D10）。
+// 有路径的文档重新读盘；未命名文档标为未编辑后关窗（mygo 随之删除恢复副本）。
+func (s Service) DiscardRecovered(ctx context.Context) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	e.recovered = false
+	if e.doc.State().Path == "" {
+		e.doc.SetEdited(false)
+		e.doc.Close()
+		return nil
+	}
+	return e.doc.Revert()
+}
+
+// State 返回文档的当前状态（页面启动时取一次；之后由 mygo 的 onDocumentState 推送变化）。
+func (s Service) State(ctx context.Context) (mygo.DocumentState, error) {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return mygo.DocumentState{}, err
+	}
+	return e.doc.State(), nil
+}

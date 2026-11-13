@@ -8,5 +8,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: { ignored: ["**/.mygo/**", "**/build/**"] },
+    // 键位表引用 internal/menu/testdata/accelerators.json（Go 菜单表导出）
+    fs: { allow: [".."] },
   },
 });

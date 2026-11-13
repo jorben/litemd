@@ -1,6 +1,9 @@
 package menu
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -95,5 +98,31 @@ func TestEnabled(t *testing.T) {
 		if got := Enabled(find(c.id), c.isDoc, c.st); got != c.want {
 			t.Errorf("%s isDoc=%v %+v: got %v want %v", c.id, c.isDoc, c.st, got, c.want)
 		}
+	}
+}
+
+// 菜单加速键表导出到 testdata/accelerators.json，页面侧的键位表（frontend/src/shell/keys.ts）
+// 由前端测试与它比对，保证两边一致。更新：LITEMD_UPDATE_GOLDEN=1 go test ./internal/menu
+func TestAcceleratorsGolden(t *testing.T) {
+	out := map[string]map[string]string{"mac": {}, "other": {}}
+	for name, mac := range map[string]bool{"mac": true, "other": false} {
+		Walk(Build(mac), func(s Spec) {
+			if s.Kind == KindPage && s.Accel != "" {
+				out[name][s.ID] = s.Accel
+			}
+		})
+	}
+	b, _ := json.MarshalIndent(out, "", "  ")
+	b = append(b, '\n')
+	p := filepath.Join("testdata", "accelerators.json")
+	if os.Getenv("LITEMD_UPDATE_GOLDEN") != "" {
+		_ = os.MkdirAll("testdata", 0o755)
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(p)
+	if err != nil || string(got) != string(b) {
+		t.Fatalf("testdata/accelerators.json 过期：LITEMD_UPDATE_GOLDEN=1 go test ./internal/menu")
 	}
 }

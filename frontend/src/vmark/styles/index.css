@@ -1,0 +1,575 @@
+/* Migrated from xiaolai/vmark@01bf9f4 src/styles/index.css
+   Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+   litemd: 去掉 Tailwind（@import、@custom-variant、@theme inline），LiteMd 不用 Tailwind。 */
+/* Note: KaTeX CSS is imported in main.tsx (after this file) for consistent
+   dev/prod cascade order. CSS @import from node_modules doesn't work in Vite. */
+
+/* Enable selector-based dark mode for Tailwind v4 */
+
+/* ===========================================
+   Tailwind ↔ VMark token bridge (D1/D13)
+   Tailwind v4 utilities are variable-backed, so ONE `@theme inline` block
+   retargets every `text-*`/`font-*`/`shadow-*` usage onto the VMark scale
+   with zero TSX edits. `inline` is load-bearing: the utilities embed the
+   `var(--…)` VALUE, so a same-name mapping (--font-mono) reaches our :root
+   token instead of emitting a self-reference. The line-height companions are
+   mandatory — Tailwind's `text-*` sets line-height too, and without them
+   Settings kept 20px leading on 13px type.
+   D1, measured: text-xs stays 12px (--font-size-sm), text-sm becomes 13px
+   (--font-size-base) — Settings row labels land on the sidebar's row size.
+   `rounded-sm/md/lg` already resolve through our identically-named :root
+   tokens (unlayered beats the theme layer); bare `rounded` compiles to a
+   0.25rem literal that equals --radius-sm — src/test/tailwindTheme.test.ts
+   pins that equality so a token retint cannot silently strand it.
+   =========================================== */
+
+/* Theme CSS Variables - GitHub Style */
+:root {
+  /* Core colors - Paper theme default */
+  --bg-color: #eeeded;
+  --text-color: #1a1a1a;
+  /* One accent per theme: --primary-color is an alias of --accent-primary.
+     The runtime already emits both from the same catalog value
+     (legacyModeColors.ts); the static alias keeps the fallbacks from
+     drifting apart. */
+  --primary-color: var(--accent-primary);
+
+  /* Browser chrome stays light and neutral around native web content. */
+  --browser-bg-color: #ffffff;
+  --browser-bg-secondary: #f7f7f7;
+  --browser-bg-tertiary: #f1f3f4;
+  --browser-text-color: #202124;
+  --browser-text-secondary: #5f6368;
+  --browser-text-tertiary: #80868b;
+  --browser-border-color: #dadce0;
+  --browser-hover-bg: rgba(60, 64, 67, 0.08);
+  --browser-hover-bg-strong: rgba(60, 64, 67, 0.12);
+  --browser-accent-bg: #e8f0fe;
+  --browser-accent-primary: #1a73e8;
+
+  /* Focus mode */
+  --blur-text-color: #c8c8c8;
+  --blur-image-opacity: 0.5;
+
+  /* Syntax elements */
+  --md-char-color: #777777;
+  --meta-content-color: var(--md-char-color); /* same role: markdown syntax ink */
+
+  /* Code blocks */
+  --code-bg-color: var(--bg-secondary);
+  --code-text-color: #1a1a1a;
+  --code-border-color: var(--border-color);
+  --code-line-height: 1.45;
+  --code-padding: 18px; /* Dynamically set by useTheme.ts to fontSize (1em of base, not code font) */
+
+  /* UI chrome */
+  --sidebar-bg: var(--bg-secondary);
+  --outline-width: 200px;
+  /* One owner for the Settings nav column width — Settings.tsx's traffic-light
+     offset arithmetic and SettingsNav's card width both read it. */
+  --settings-nav-width: 13rem;
+  /* Static default; App.tsx overrides it on the shell root via shellChromeVars()
+     from WORKSPACE_RAIL_WIDTH, which stays the source of truth because the
+     rail's width also feeds layout arithmetic in TS. Declared here so consumers
+     that use it WITHOUT a fallback (title-bar.css) still resolve, and so the
+     value is visible to anyone reading the token file. */
+  --workspace-rail-width: 30px;
+  /* Vertical space a full-height column (sidebar, workspace rail) must leave
+     clear at the top of the window: the app's own chrome strip, and the macOS
+     traffic lights inside it. Static default of 0 — the shell root sets the real
+     value from shellChrome.ts, and only macOS mounts the strip, so 0 is the
+     correct fallback for every other platform. */
+  --shell-top-inset: 0px;
+  /* The macOS window controls' own geometry: the horizontal space the title bar
+     keeps clear of them, and their optical centre, which the title bar centres
+     its content on. Static defaults of 0 for the same reason as above — only
+     macOS puts the controls inside the webview, and the shell root writes the
+     real values from shell/trafficLights.ts. */
+  --traffic-lights-zone: 0px;
+  --traffic-lights-centre: 0px;
+  /* The frame of the leading column (workspace rail + sidebar): gutter, radius,
+     shadow and right-edge divider. Written by the shell root from
+     shell/shellChrome.ts per the user's sidebar style; these statics are the
+     default style's ("flat"), so a consumer resolving before mount draws that. */
+  --shell-card-inset: 0px;
+  --shell-card-radius: 0px;
+  --shell-card-shadow: none;
+  --shell-card-divider: 1px solid var(--border-color);
+  --border-color: #d5d4d4;
+  /* D8: the >=3:1 boundary for CONTROLS; --border-color stays a
+     hairline divider. Written per theme by useTheme; static default = paper. */
+  --control-border: #7e7d7d;
+  --table-border-color: var(--border-color);
+  --selection-color: rgba(0, 102, 204, 0.2);
+  --bg-secondary: #e5e4e4;
+  --text-secondary: #666666;
+
+  /* Settings UI - additional aliases */
+  --bg-tertiary: #f0f0f0;
+  --text-tertiary: #999999;
+  --accent-primary: #0066cc;
+  --accent-bg: rgba(0, 102, 204, 0.1);
+  /* Aliases rule 31 documents ("Alias for --bg-color/--text-color"); declared
+     as real aliases so a consumer that reaches for the documented name gets
+     the token instead of a silently-dropped declaration. */
+  --bg-primary: var(--bg-color); /* token-unused-ok: documented alias name — kept resolvable for consumers that reach for it */
+  --text-primary: var(--text-color); /* token-unused-ok: documented alias name — kept resolvable for consumers that reach for it */
+
+  /* Border radius tokens — the φ curvature ladder (maintainer):
+     window 21 → shell card 13 → lg 8 → md 5 → sm 3, each step ≈ ×0.62
+     (Fibonacci: 3, 5, 8, 13, 21). Pick by TIER — floating surface / content
+     block & page row / control — never by taste. Pills stay off-ladder.
+     Runtime values live in tokens.ts sharedPrimitives.radius — keep in sync. */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-pill: 100px;
+
+  /* Semantic spacing — the family .claude/rules/31-design-tokens.md mandates
+     for padding/margin/gap. These were documented (and referenced by the
+     PRIMITIVES comment below) but never actually declared, so every reference
+     to them resolved to nothing and CSS dropped the whole
+     declaration: 133 padding/margin/gap rules across 13 components silently
+     did nothing, which is why panels rendered with their content flush to the
+     edge. Aliased onto the primitive scale so the two layers cannot drift. */
+  --spacing-1: var(--space-1); /* 4px */
+  --spacing-2: var(--space-2); /* 8px */
+  --spacing-3: var(--space-3); /* 12px */
+
+  /* Popup shared tokens (format toolbar, source popup, etc.) */
+  --popup-padding: 6px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
+  /* Static fallback for the typed name applyTheme() writes at runtime — the
+     @theme bridge's shadow-popup utility reads it, and without a static the
+     utility resolves to nothing until the first applyTheme() pass. */
+  --shadow-popup: var(--popup-shadow);
+  --popup-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --popup-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  /* Typography (R3) — TWO font roles:
+     --font-ui   the SYSTEM stack, for chrome. Never touched by settings, so
+                 the UI cannot restyle when the reading font changes.
+     --font-sans the READING font — the user's choice, overwritten at runtime
+                 by useTheme from settings; this static equals
+                 buildFontStack("system","system","system","macos") so first
+                 paint and post-effect paint are identical
+                 (src/test/fontRoles.test.ts pins the equality).
+     --font-mono same contract; the old "SauceCodePro NF, Courier New" static
+                 was a stack the runtime never produced. */
+  --font-ui: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* Blockquote body ink — readable prose, not syntax decoration */
+  --quote-text: var(--text-secondary);
+
+  /* Syntax palette — static fallback (paper values). The catalog owns these
+     per theme (ThemeTokens.syntax, D11); applyTheme overrides at
+     runtime. src/theme/syntaxStaticFallback.test.ts pins this block to the
+     paper/night catalog values, replacing the old styles/syntax-palette.css. */
+  --syntax-keyword: #b3303d;
+  --syntax-type: #6f42c1;
+  --syntax-function: #6f42c1;
+  --syntax-property: #005cc5;
+  --syntax-variable: #1a1a1a;
+  --syntax-string: #032f62;
+  --syntax-number: #005cc5;
+  --syntax-operator: #b3303d;
+  --syntax-punctuation: #1a1a1a;
+  --syntax-comment: #5b626b;
+  --syntax-escape: #005cc5;
+  --syntax-constant: #005cc5;
+  --syntax-attribute: #6f42c1;
+  --syntax-tag: #1d7031;
+  --syntax-link: #032f62;
+  --syntax-invalid: #bd212e;
+
+  /* Text emphasis colors */
+  --strong-color: rgb(63, 86, 99);
+  --emphasis-color: rgb(91, 4, 17);
+
+  /* Source mode */
+  --source-mode-bg: rgba(0, 0, 0, 0.02);
+
+  /* Alert block colors */
+  --alert-note: #0969da;
+  --alert-tip: #1a7f37;
+  --alert-important: #8250df;
+  --alert-warning: #9a6700;
+
+  /* Highlight mark */
+  --highlight-bg: #fff3a3;
+  --highlight-text: inherit;
+
+  /* Error states (default for light mode) */
+  --error-color: #cf222e;
+  --error-color-hover: #b91c1c;
+  --error-bg: #ffebe9;
+
+  /* Warning states */
+  --warning-color: #9a6700;
+  --warning-bg: rgba(245, 158, 11, 0.1);
+  --warning-border: rgba(245, 158, 11, 0.3);
+
+  /* Success states */
+  --success-color: #16a34a;
+  --success-color-hover: #15803d;
+  --success-color-dark: #4ade80;
+
+  /* Contrast text (for colored backgrounds like primary buttons) */
+  --contrast-text: white;
+
+  /* Hover states (standardized). Light hover was 4% and read below
+     perception on grey card surfaces (~1.02:1 on paper's #dedddd);
+     retuned to 6%. Runtime values live in
+     tokens.ts (hoverLight/hoverDark) — keep both in sync. */
+  --hover-bg: rgba(0, 0, 0, 0.06);
+  --hover-bg-strong: rgba(0, 0, 0, 0.08);
+
+  /* Dark mode hover (use in .dark-theme selectors) */
+  --hover-bg-dark: rgba(255, 255, 255, 0.08);
+
+  /* Subtle backgrounds (retuned 2%/3% → 3%/4% — same reasoning) */
+  --subtle-bg: rgba(0, 0, 0, 0.03);
+  --subtle-bg-hover: rgba(0, 0, 0, 0.04);
+
+  /* Raised control surface: the elevated button face. Mode-level,
+     not per-theme — white lifts off every light page; #383d46 lifts off both
+     dark pages. */
+  --surface-raised: #ffffff;
+
+  /* Spacing scale (common values) */
+
+  /* Icon button sizes */
+  --icon-size-sm: 24px;   /* bar buttons — also the D2 hit-target floor */
+  --target-min: 24px;     /* minimum clickable square (D2); expanders consume it */
+  --icon-size-md: 26px;   /* Popup buttons */
+  --icon-size-lg: 28px;   /* Toolbar buttons */
+
+  /* Global list indent (inherited by nested contexts) */
+  --list-indent: 1em;
+
+  /* Editor typography - computed dynamically in useTheme.ts.
+     Static fallbacks ensure print and SSR work correctly.
+     Defaults match settingsStore defaults: fontSize=18, lineHeight=1.8, blockSpacing=1 */
+  --editor-font-size: 18px;
+  --editor-font-size-mono: 15.3px;     /* 18 * 0.85 */
+  --editor-line-height: 1.8;
+  --editor-line-height-px: 32.4px;     /* 18 * 1.8 */
+  --editor-block-spacing: 1em;         /* blockSpacing=1 → margin = lineHeight*(1-1)+1 = 1em */
+  --editor-content-padding: 36px;      /* fontSize * 2 */
+  --focus-dim-opacity: 1;              /* Focus Mode dim level; useTheme.ts overrides */
+  --cjk-letter-spacing: 0.05em;        /* Default CJK spacing */
+  --editor-width: 50em;                /* Default editor width */
+
+  /* Search match colors */
+  --search-match-color: rgba(255, 180, 0, 0.8);
+  --search-match-active-color: rgba(255, 200, 0, 0.7);
+
+  /* Multi-cursor */
+  --multi-cursor-color: hsl(217 91% 60%);
+  --multi-cursor-selection-bg: hsla(217, 91%, 60%, 0.3);
+
+  /* Alert tokens for dark mode (centralized) */
+  --alert-note-dark: #58a6ff;
+  --alert-tip-dark: #3fb950;
+  --alert-important-dark: #a371f7;
+  --alert-warning-dark: #d29922;
+  --alert-caution-dark: #f85149;
+
+  /* Media type colors (light mode) */
+  --media-video: #0d9488;
+  --media-audio: #6366f1;
+  --media-youtube: #dc2626;
+  --media-vimeo: #00adef;
+  --media-bilibili: #fb7299;
+
+  /* Media type colors (dark mode) */
+  --media-video-dark: #2dd4bf;
+  --media-audio-dark: #818cf8;
+  --media-youtube-dark: #f87171;
+  --media-vimeo-dark: #4ac3f0;
+  --media-bilibili-dark: #fc9cb5;
+
+  /* ========================================
+     PRIMITIVES LAYER
+     Use semantic tokens above when they cover the case (--popup-padding,
+     --icon-size-lg, --radius-sm, --spacing-2). Reach for primitives only when
+     no semantic name exists. See .claude/rules/31-design-tokens.md.
+     ======================================== */
+
+  /* Spacing scale (4px-based, with half-steps for common 6/10/14px) */
+  --space-px: 1px;
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-15: 60px;
+
+  /* Border widths */
+  --border-hairline: 0.5px;
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-thick: 4px;
+
+  /* UI font sizes (separate from runtime --editor-font-size-*) */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 22px; /* identity/display text (welcome title) */
+
+  /* Component dimensions not covered by --icon-size-* */
+  --size-icon-xs: 14px;     /* small inline icons (popup buttons, dropdown items) */
+  --size-icon-medium: 18px; /* standard SVG icon */
+  --size-btn-xs: 20px;      /* mermaid zoom button, file-remove button */
+
+  /* Line heights */
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.35;
+  --line-height-base: 1.4;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+
+  /* Letter spacing (UI labels, uppercase headings) */
+  --letter-spacing-tight: 0.3px;
+  --letter-spacing-loose: 0.5px;
+  /* THE tracking for uppercase micro-labels. Three values had grown
+     for one role (0.03em / 0.3px / 0.5px); every text-transform:uppercase
+     label uses this one. tight/loose remain for non-caps uses. */
+  --letter-spacing-caps: 0.5px;
+
+  /* Opacity scale */
+  --opacity-disabled: 0.4;
+  --opacity-muted: 0.5;
+  --opacity-subtle: 0.6;
+  --opacity-half-faded: 0.7;
+  --opacity-mostly-opaque: 0.85;
+
+  /* Animation durations */
+  --duration-fast: 0.1s;
+  --duration-base: 0.15s;
+  --duration-medium: 0.2s;
+  --duration-slower: 0.6s;
+  --duration-1s: 1s;
+  --duration-1-5s: 1.5s;
+  --duration-5s: 5s;
+
+  /* Z-index stack (mirrors 32-component-patterns.md hierarchy) */
+  --z-resize-handle: 10;
+  --z-panel-overlay: 12;      /* floating bar inside a panel (terminal search) */
+  --z-bar: 100;
+  --z-toolbar: 102;
+  --z-toolbar-dropdown: 103;
+  --z-context-menu: 1000;
+  --z-mcp-overlay: 1200;
+  --z-popup: 9999;
+  --z-table-context: 10000;
+
+  /* Bar heights (status-bar, universal-toolbar; find-bar is 38px because
+     of its smaller padding/row arithmetic). Editor padding-bottom matches. */
+  --bar-height: 40px;
+}
+
+/* Dark theme token overrides */
+.dark-theme {
+  /* A 10%-black shadow is invisible on a dark page — the active tab pill's
+     elevation vanished on night/solarized. */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  /* Elevated button face, lifted off both dark pages. */
+  --surface-raised: #383d46;
+
+  /* Browser chrome, dark neutral. The light values above are a pure-white
+     neutral; without these the chrome stayed white in Night and Solarized,
+     which is where the mismatch was worst. `--browser-bg-color` here EQUALS the
+     dark theme's bg.primary (#23262b) on purpose — the terminal collapses to
+     that same dark-neutral palette beside a browser tab, and the two must be the
+     same colour or the seam this exists to remove comes back. The catalog owns
+     both values; src/theme/terminalThemeForBrowser.test.ts pins the equality. */
+  --browser-bg-color: #23262b;
+  --browser-bg-secondary: #2a2e34;
+  --browser-bg-tertiary: #32363d;
+  --browser-text-color: #d6d9de;
+  --browser-text-secondary: #9aa0a6;
+  --browser-text-tertiary: #6b7078;
+  --browser-border-color: #3a3f46;
+  --browser-hover-bg: rgba(255, 255, 255, 0.08);
+  --browser-hover-bg-strong: rgba(255, 255, 255, 0.12);
+  --browser-accent-bg: rgba(88, 166, 255, 0.12);
+  --browser-accent-primary: #58a6ff;
+
+  --multi-cursor-color: hsl(217 91% 70%);
+  --multi-cursor-selection-bg: hsla(217, 91%, 70%, 0.25);
+  --search-match-color: rgba(255, 200, 0, 0.7);
+  --search-match-active-color: rgba(255, 200, 0, 0.5);
+  --divergent-border-dark: rgba(0, 136, 255, 0.25);
+
+  /* Syntax palette — static dark fallback (night values; see :root note). */
+  --syntax-keyword: #ff7b72;
+  --syntax-type: #d2a8ff;
+  --syntax-function: #d2a8ff;
+  --syntax-property: #79c0ff;
+  --syntax-variable: #d6d9de;
+  --syntax-string: #a5d6ff;
+  --syntax-number: #79c0ff;
+  --syntax-operator: #ff7b72;
+  --syntax-punctuation: #d6d9de;
+  --syntax-comment: #929ba4;
+  --syntax-escape: #79c0ff;
+  --syntax-constant: #79c0ff;
+  --syntax-attribute: #d2a8ff;
+  --syntax-tag: #7ee787;
+  --syntax-link: #a5d6ff;
+  --syntax-invalid: #f96d66;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* Chrome typography (R3/R4): the system face at the chrome base size. The
+     document re-declares its own reading face and size under the editor
+     selectors — body no longer leaks 18px reading type into every panel. */
+  font-family: var(--font-ui);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--selection-color);
+}
+
+/* fix(#946) — grabbable overlay-style scrollbars (was a 1px hairline) */
+/* Scrollbar styling — grabbable but unobtrusive overlay feel.
+ * 10px wide so the thumb is easy to grab on long documents, while a
+ * transparent track and a translucent, padded thumb keep it visually quiet
+ * (macOS overlay-scrollbar feel). Tokens drive both themes. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  /* color-mix keeps the resting thumb subtle; the padding-style transparent
+   * border + background-clip inset the visible thumb so it reads as a slim
+   * pill rather than filling the full 10px gutter. Ink = --text-secondary:
+   * --md-char-color is the SYNTAX marker colour and rendered the
+   * thumb green on night; the terminal thumb derives from the same text ink. */
+  background-color: color-mix(in srgb, var(--text-secondary) 45%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-lg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Sonner toasts follow the theme tokens, not sonner's own palette
+   One rule: sonner reads these three custom properties. */
+[data-sonner-toaster] {
+  /* token-doc-ok: sonner's OWN property names, not VMark tokens */
+  --normal-bg: var(--bg-color); /* token-unused-ok: consumed inside sonner's stylesheet */
+  --normal-border: var(--border-color); /* token-doc-ok: sonner's property — token-unused-ok: consumed inside sonner's stylesheet */
+  --normal-text: var(--text-color); /* token-doc-ok: sonner's property — token-unused-ok: consumed inside sonner's stylesheet */
+}
+
+/* Tailwind's ring paints --tw-ring-offset-color (a REGISTERED inherits:false
+   property defaulting to #fff), so every ring-offset ring wore a white halo
+   on dark themes. A universal rule reaches non-inheriting registered
+   properties by direct match. */
+* {
+  /* token-doc-ok: Tailwind's registered ring property, not a VMark token */
+  --tw-ring-offset-color: var(--bg-color); /* token-unused-ok: consumed by Tailwind's ring utilities */
+}
+
+/* Window drag region */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+  cursor: default;
+}
+
+/* Cursor policy (D7, scoped per platform).
+   macOS chrome follows the Apple HIG: arrow on buttons and controls.
+   Windows/Linux users of a webview app expect pointer feedback, so the
+   interactive-chrome primitives consume this token instead of a literal.
+   The root platform class is applied at startup (bootstrap.tsx) from
+   getRuntimePlatform(). `pointer` stays for links inside content. */
+:root {
+  --cursor-interactive: default;
+}
+
+:root.platform-windows,
+:root.platform-linux {
+  --cursor-interactive: pointer;
+}
+
+/* ===========================================
+   Global Focus Reset
+   Components define their own focus indicators (U-shaped underlines, etc.)
+   Using :where() for zero specificity so component styles can override
+   =========================================== */
+:where(*):focus-visible {
+  outline: none;
+}
+
+/* Translucency is an aesthetic, not information — honour the OS
+   setting with ONE owner instead of touching all 14 backdrop-filter sites. */
+@media (prefers-reduced-transparency: reduce) {
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* ===========================================
+   Reduced motion — ONE owner (D9/R10)
+   A duration COLLAPSE, not `animation: none`: `forwards` end states still
+   land (checked: the three `forwards` animations rest correctly and 0
+   `animationend` listeners exist), and because this is UNLAYERED it also
+   neutralises Tailwind's layered `animate-*` utilities. Per-file blocks are
+   deleted — the only sanctioned exceptions RESTORE a resting state
+   (multi-cursor.css, StatusBar.css), each commented at
+   the site. src/test/reducedMotionGlobal.test.ts pins all of this.
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

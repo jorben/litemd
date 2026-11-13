@@ -15,6 +15,37 @@ export interface ContentInfo {
   seq: number;
 }
 
+/**
+ * DocumentState describes a document, as Document.State returns it and
+ * pages of its window get it.
+ */
+export interface DocumentState {
+  /**
+   * Name is the document's file name, or a name such as "Untitled 2"
+   * for an untitled document.
+   */
+  name: string;
+  /** Path is the document's file, "" while it is untitled. */
+  path: string;
+  /** Edited reports whether the document has unsaved changes. */
+  edited: boolean;
+  /**
+   * ReadOnly reports that the document's file can't be written: saving
+   * asks for another file.
+   */
+  readOnly: boolean;
+  /**
+   * Conflict reports that another app changed the document's file while
+   * the document had unsaved changes: saving asks which to keep.
+   */
+  conflict: boolean;
+  /**
+   * Deleted reports that the document's file was deleted: saving
+   * writes it again.
+   */
+  deleted: boolean;
+}
+
 /** FileState 是页面保存的按文件状态。 */
 export interface FileState {
   mode?: string;
@@ -147,6 +178,17 @@ export const Session = {
   content(): Promise<ContentInfo> {
     return call("Session.Content");
   },
+  /**
+   * DiscardRecovered：恢复提示条「丢弃，载入磁盘版本」（技术方案 3.3 节，D10）。
+   * 有路径的文档重新读盘；未命名文档标为未编辑后关窗（mygo 随之删除恢复副本）。
+   */
+  discardRecovered(): Promise<void> {
+    return call("Session.DiscardRecovered");
+  },
+  /** Duplicate：「存储副本」（只读文件提示条）。 */
+  duplicate(): Promise<void> {
+    return call("Session.Duplicate");
+  },
   /** Flushed 回应收齐请求 n。 */
   flushed(n: number): Promise<void> {
     return call("Session.Flushed", n);
@@ -171,6 +213,10 @@ export const Session = {
   saveAnyway(): Promise<void> {
     return call("Session.SaveAnyway");
   },
+  /** SaveAs：「另存为…」（文件被删除时的提示条等）。先收齐。 */
+  saveAs(): Promise<void> {
+    return call("Session.SaveAs");
+  },
   /**
    * SaveAsUTF8：非 UTF-8 文档另存为 UTF-8（技术方案 3.2 节，D14）。不走 mygo 的 SaveAs：
    * 那会经过拒绝写回的 Write，也会把当前文档改指向新路径。
@@ -185,6 +231,10 @@ export const Session = {
   /** SetMenuState：页面报告当前模式，Go 据此置灰菜单（技术方案 3.4 节）。 */
   setMenuState(st: MenuState): Promise<void> {
     return call("Session.SetMenuState", st);
+  },
+  /** State 返回文档的当前状态（页面启动时取一次；之后由 mygo 的 onDocumentState 推送变化）。 */
+  state(): Promise<DocumentState> {
+    return call("Session.State");
   },
 } as const;
 

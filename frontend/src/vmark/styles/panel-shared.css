@@ -1,0 +1,163 @@
+/* Migrated from xiaolai/vmark@01bf9f4 src/styles/panel-shared.css
+   Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md). */
+/**
+ * Shared panel & small-control primitives.
+ *
+ *   .vm-panel__header / __title / __row   the one header rhythm (8/12, 14px)
+ *   .vm-chip (+ --toggle, --kbd)          pills, filter toggles, key hints
+ *   .vm-switch (+ __knob)                 the settings switch (36×20 track)
+ *   .vm-spinner                           the one loading spinner
+ *   .vm-scroll--thin                      2px scrollbar for dense lists
+ */
+
+.vm-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-bottom: var(--border-thin) solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.vm-panel__title {
+  flex: 1;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-color);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vm-panel__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--space-1-5) var(--spacing-2);
+}
+
+/* Chips: pills at rest; the toggle variant squares off to read as a control. */
+.vm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-half) var(--space-2);
+  border: var(--border-thin) solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-base);
+}
+
+.vm-chip--toggle {
+  border-radius: var(--radius-sm);
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
+}
+
+/* Pressed: accent fill and border as the indicator; the label keeps its ink
+ * (rule 30, R6). */
+.vm-chip--toggle[aria-pressed="true"] {
+  background: var(--accent-bg);
+  border-color: var(--accent-primary);
+  color: var(--text-color);
+}
+
+.vm-chip--kbd {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+}
+
+/* The switch: a borderless 36×20 track (maintainer direction,
+   superseding the D8 control-border ring here) — the off state is the
+   hover-strong fill, the on state the solid accent, and the page-colour
+   knob supplies the shape contrast on both. A fixed white knob vanished
+   on night's pastel accent, hence the PAGE colour. */
+.vm-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--hover-bg-strong);
+  cursor: var(--cursor-interactive, default);
+  transition: background var(--duration-base);
+}
+
+.vm-switch[aria-checked="true"] {
+  /* ui-ok(state): the switch track IS the indicator, not a selected row */
+  background: var(--accent-primary);
+}
+
+.vm-switch:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.vm-switch:focus-visible {
+  outline: var(--border-medium) solid var(--accent-primary);
+  outline-offset: var(--border-medium);
+}
+
+/* Centred by arithmetic, not by eye. In the 36x20 track a 14px knob insets
+   (20-14)/2 = 3px top and bottom, and 3px at EACH END of a 36-3-3-14 = 16px
+   travel. The 2px it replaced left 4px below the knob and, once translated,
+   4px past it (#1391) — and --shadow-sm points down, so the optical error
+   read as a different direction than the geometric one. Retuning the track
+   or the travel means redoing this sum; panel.test.ts checks it. */
+.vm-switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-color);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-base);
+}
+
+.vm-switch[aria-checked="true"] .vm-switch__knob {
+  transform: translateX(16px);
+}
+
+/* The one spinner. Size via font-size-free box: default 14px; scale with a
+   width/height override at the call site if a larger one is genuinely needed. */
+.vm-spinner {
+  display: inline-block;
+  width: var(--size-icon-xs);
+  height: var(--size-icon-xs);
+  border: var(--border-medium) solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: vm-spin var(--duration-slower) linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes vm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dense lists that need a quieter scrollbar than the 10px global. */
+.vm-scroll--thin::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+
+.vm-scroll--thin::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 1px;
+}
+
+.vm-scroll--thin::-webkit-scrollbar-track {
+  background: transparent;
+}
