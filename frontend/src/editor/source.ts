@@ -92,7 +92,8 @@ export class SourceEditor {
           this.readOnlyComp.of([EditorState.readOnly.of(o.readOnly), EditorView.editable.of(!o.readOnly)]),
           keymap.of([...closeBracketsKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           matchField,
-          EditorView.contentAttributes.of({ spellcheck: "false", "aria-label": "Markdown 源码" }),
+          // spellcheck 由外壳按设置写到 contentDOM（F5.11）
+          EditorView.contentAttributes.of({ "aria-label": "Markdown 源码" }),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
             if (!this.loading && u.transactions.some((tr) => tr.annotation(Transaction.userEvent) !== undefined)) o.onUserEdit?.();

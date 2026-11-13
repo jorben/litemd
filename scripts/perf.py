@@ -2,8 +2,8 @@
 # NF1–NF4 测量（docs/perf-report.md）：冷启动、已运行时打开新文件、多窗口内存、1 MB 文档在
 # 所见即所得 / 源码模式下的输入延迟、保真写回耗时、安装包大小。
 #
-# 先构建带自动化插件的非调试版本：
-#   GOFLAGS=-tags=e2e go tool mygo build -skip-dmg -o /tmp/litemd-perf
+# 先构建带自动化插件的版本（非 -debug 构建带 mygo_noinspector 标签，不含自动化插件，只能用 -debug）：
+#   GOFLAGS=-tags=e2e go tool mygo build -debug -skip-dmg -o /tmp/litemd-perf
 # 再运行：python3 scripts/perf.py [DMG 路径]
 import glob, json, os, statistics, subprocess, sys, time
 
@@ -106,7 +106,10 @@ for k in range(5):
         os.remove(SOCK)
     t0 = time.time() * 1000
     subprocess.Popen([APP, small], env={**os.environ, "MYGO_AUTOMATION": SOCK}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    end = time.time() + 20
     while not os.path.exists(SOCK):
+        if time.time() > end:
+            raise SystemExit("自动化 socket 没有出现：需要 -debug 构建")
         time.sleep(0.01)
     ma("open", "--socket", SOCK)
     cold.append(round(select("doc100k.md") - t0))

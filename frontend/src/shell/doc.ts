@@ -171,6 +171,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
       markOutline();
       saveFileState();
     });
+    ed.view.contentDOM.setAttribute("spellcheck", String(!!getSettings().spellCheck));
     return ed;
   }
 
@@ -397,6 +398,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     setSettings(v);
     applyAppearance(getSettings());
     source?.setTabSize(v.tabWidth);
+    applySpellcheck();
     renderStatus();
     if (prevNet !== v.networkImages) {
       showBanner({ key: "netchanged", kind: "info", title: t("「加载网络图片」设置已更改"), detail: t("重新载入后对这个窗口生效。"),
@@ -715,6 +717,13 @@ export async function docPage(app: HTMLElement): Promise<void> {
       showTextInput: from === to,
     });
   }
+  // ---- 拼写检查（F5.11，默认关闭）：WebView 自带，写到两个编辑器的可编辑元素上 ----
+  function applySpellcheck(): void {
+    const on = String(!!getSettings().spellCheck);
+    rich.editor.view.dom.setAttribute("spellcheck", on);
+    source?.view.contentDOM.setAttribute("spellcheck", on);
+  }
+
   // ---- 浮动格式栏（F5.3）：所见即所得中选中文字时出现 ----
   function scheduleToolbar(): void {
     cancelAnimationFrame(toolbarRaf);
@@ -943,6 +952,8 @@ export async function docPage(app: HTMLElement): Promise<void> {
   renderBanners();
   renderStatus();
   if (mode === "wysiwyg" && info.untitled) rich.editor.commands.focus();
+
+  applySpellcheck();
 
   window.__litemd = {
     page: "doc", info, sync, rich, readyAt: performance.timeOrigin + performance.now(),
