@@ -1,0 +1,15 @@
+# pnpm 设置（技术方案 1.2 节）
+
+# 分钟。新发布的版本观察 7 天后才会解析进锁文件；--frozen-lockfile 安装不受影响。
+minimumReleaseAge: 10080
+# 例外：mygo 的 npm 包是调研基线锁定的框架本身（精确版本 0.9.0，
+# 与 Go 侧 github.com/egoist/mygo 同一版本线），发布不足 7 天也要用。
+# 升级 mygo 时同步检查这里。
+minimumReleaseAgeExclude:
+  - mygo-runtime
+  - mygo-cli
+  - "@egoist/mygo-cli-*"
+
+# 只允许确有需要的依赖执行安装脚本
+onlyBuiltDependencies:
+  - esbuild

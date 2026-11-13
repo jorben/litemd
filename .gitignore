@@ -56,8 +56,11 @@ mygo-update.key
 *.cer
 *.mobileprovision
 
+# ── 参考源码（mygo、vmark，按调研基线 checkout，不提交） ──
+/.reference/
+
 # ── 工具 ────────────────────────────────────────────────
-# pi 代理的本地任务状态
-/.pi/tasks/
+# pi 代理的本地状态（任务、目标）
+/.pi/
 # 性能测量生成的大文件语料
 /tmp/
