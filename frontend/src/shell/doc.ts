@@ -77,6 +77,17 @@ export async function docPage(app: HTMLElement): Promise<void> {
   let swapped = false;
   let state: DocumentState | null = initialState as DocumentState | null;
   const banners: Banner[] = [];
+  // 计时器与界面状态：编辑器创建时就可能触发回调（载入事务、大纲刷新），必须先于编辑器声明
+  let splitTimer = 0;
+  let scrollLock = false;
+  let statusTimer = 0;
+  let saveFlash = "";
+  let findBuilt = false;
+  let findReplace = false;
+  let findGuard = false;
+  let outlineTimer = 0;
+  let fsTimer = 0;
+  let heads: Array<{ level: number; text: string; pos?: number; line?: number }> = [];
 
   app.className = "lm-doc";
   app.innerHTML = `
@@ -95,6 +106,10 @@ export async function docPage(app: HTMLElement): Promise<void> {
   const main = $(".lm-main");
   const richScroll = $(".lm-rich .editor-content");
   const sourceHost = $(".lm-source");
+  const status = $(".lm-status");
+  const bannerBox = $(".lm-banners");
+  const findBar = $(".lm-find");
+  const outline = $(".lm-outline");
 
   // ---- 编辑器 ----
   const sync = new PageSync({ client: Session, getText: () => currentText() });
@@ -181,6 +196,16 @@ export async function docPage(app: HTMLElement): Promise<void> {
       } else sourceEntry = source.text;
     }
     if (next === "split") renderSplit();
+    // 查找条开着时，按新模式的编辑器重新查找（两种编辑器各自计数）
+    if (findState().isOpen) {
+      if (next === "source" || next === "split") runSourceFind();
+      else {
+        // vmark search 扩展在 isOpen 变化时重新扫描：关再开一次，让所见即所得重新计数
+        setFind({ isOpen: false, currentIndex: -1, matchCount: 0 });
+        setFind({ isOpen: true });
+      }
+      findBuilt = false;
+    }
     renderStatus();
     renderFind();
     renderOutline();
@@ -209,7 +234,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   }
 
   // 分屏：右侧只读预览（F3.4），防抖整篇重绘，比例同步滚动
-  let splitTimer = 0;
   function scheduleSplit(): void {
     clearTimeout(splitTimer);
     splitTimer = window.setTimeout(renderSplit, (source?.text.length ?? 0) > 200_000 ? 500 : 200);
@@ -224,7 +248,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
       splitPreview = new WysiwygEditor({ element: el, text: source.text, editable: false });
     } else splitPreview.load(source.text);
   }
-  let scrollLock = false;
   function syncSplitScroll(from: HTMLElement): void {
     if (mode !== "split" || scrollLock) return;
     const to = from === richScroll ? source?.scroller : richScroll;
@@ -241,9 +264,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   });
 
   // ---- 状态栏（F9.5、F5.10） ----
-  const status = $(".lm-status");
-  let statusTimer = 0;
-  let saveFlash = "";
   function scheduleStatus(): void {
     clearTimeout(statusTimer);
     statusTimer = window.setTimeout(renderStatus, 300);
@@ -275,7 +295,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   }
 
   // ---- 提示条（技术方案 8.3） ----
-  const bannerBox = $(".lm-banners");
   function showBanner(b: Banner): void {
     const i = banners.findIndex((x) => x.key === b.key);
     if (i >= 0) banners[i] = b;
@@ -429,9 +448,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   }
 
   // ---- 查找替换（F7.2/F7.3） ----
-  const findBar = $(".lm-find");
-  let findBuilt = false;
-  let findReplace = false;
   function openFind(replace: boolean): void {
     findReplace = replace || findReplace;
     setFind({ isOpen: true });
@@ -501,7 +517,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
     const count = findBar.querySelector<HTMLElement>(".lm-count")!;
     count.textContent = s.query ? (s.matchCount ? `${s.currentIndex + 1}/${s.matchCount}` : t("无结果")) : "";
   }
-  let findGuard = false;
   function runSourceFind(): void {
     if (!source || findGuard) return;
     findGuard = true;
@@ -532,9 +547,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   }
 
   // ---- 大纲（F7.1） ----
-  const outline = $(".lm-outline");
-  let outlineTimer = 0;
-  let heads: Array<{ level: number; text: string; pos?: number; line?: number }> = [];
   function scheduleOutline(): void {
     if (!outlineOn) return;
     clearTimeout(outlineTimer);
@@ -591,7 +603,6 @@ export async function docPage(app: HTMLElement): Promise<void> {
   function reportMenuState(): void {
     void Session.setMenuState({ mode, editable: !readOnly && !huge, lossy: info.lossy, outline: outlineOn, statusbar: getSettings().statusBar }).catch(() => {});
   }
-  let fsTimer = 0;
   function saveFileState(): void {
     clearTimeout(fsTimer);
     fsTimer = window.setTimeout(() => void FileState.set({ mode, outline: outlineOn, scroll: scrollRatio() }).catch(() => {}), 800);

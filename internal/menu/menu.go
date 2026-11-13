@@ -123,7 +123,12 @@ func Refresh() {
 		return
 	}
 	w := mygo.FocusedWindow()
-	isDoc := w != nil && IsDocWindow(w)
+	if w == nil {
+		// 应用尚未激活（如从命令行启动后、切到其他应用时）：不改动菜单，
+		// 等窗口获得焦点时 OnFocus 再刷新；否则文档类菜单项会一直置灰
+		return
+	}
+	isDoc := IsDocWindow(w)
 	st, _ := StateOf(w)
 	for id, s := range specs {
 		if it := built.ItemByID(id); it != nil {
