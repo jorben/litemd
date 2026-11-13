@@ -6,7 +6,7 @@
 | 日期 | 2026-11-13 |
 | 依据 | `docs/product-requirements.md` v0.3 |
 | 调研基线 | mygo main `6eaa7fb`（v0.9.0，2026-11-13）；vmark main `01bf9f4`（0.9.120，2026-11-12） |
-| 修订 | v0.2：按方案评审结果修订，逐条对照 mygo、vmark 源码，修正启动窗口、内容同步、保真写回、编码、安全等处的缺陷，见附录 A |
+| 修订 | v0.2：按方案评审结果修订，逐条对照 mygo、vmark 源码，修正启动窗口、内容同步、保真写回、编码、安全等处的缺陷，见附录 A。v0.2.1：前端包管理由 Bun 改为 pnpm（第 1.2 节） |
 
 本文的“需求编号”（F1.2、NF5 等）指 PRD 中的条目，“决策编号”（D1–D15）指 PRD 第 10 节。文中引用的 mygo、vmark 源码位置都以上面的调研基线为准。
 
@@ -56,7 +56,8 @@
 | 桌面框架 | **mygo**（Go，MIT），锁定具体版本 | 系统 WebView，纯 Go 不用 cgo，`NewDocuments` 提供文档窗口全套行为 |
 | Go 版本 | Go 1.27.3+（mygo 的 go.mod 要求） | |
 | 编码转换 | `golang.org/x/text`（GB18030、UTF-16） | F2.6、D14 |
-| 前端构建 | Vite + TypeScript，**Bun** 作包管理和脚本 | 跟随 mygo 模板；vmark 的 pnpm patch 改用 Bun 的 `patchedDependencies` |
+| 前端构建 | Vite + TypeScript，**pnpm** 作包管理和脚本，Node.js 24 LTS（不低于 22.6） | 与 vmark 一致，vmark 的依赖补丁可原样迁入；不使用 Bun，见第 1.2 节 |
+| mygo CLI | 通过 `go.mod` 的 `tool` 指令固定版本，用 `go tool mygo …` 运行 | CLI 与 mygo 库版本始终一致，不需要 npm 包 `mygo-cli` |
 | UI 框架 | React 19 + zustand（只管单窗口内的状态） | vmark 组件都是 React |
 | 所见即所得 | Tiptap 3（ProseMirror） | 迁自 vmark |
 | 源码编辑 | CodeMirror 6 | 迁自 vmark |
@@ -66,12 +67,36 @@
 | 代码高亮 | lowlight（highlight.js 语法） | 只打包常用约 30 种语言 |
 | HTML 过滤 | DOMPurify | |
 
+### 1.2 包管理与工具链：pnpm
+
+选 pnpm、不用 mygo 模板默认的 Bun。依据（mygo `6eaa7fb` 源码）：
+
+- mygo 对 Bun 没有硬依赖：读取 `mygo.config.ts` 时优先用 Bun，没有则用 Node.js 22.6+（`cmd/mygo/config_ts.go`）；`mygo init` 找不到 Bun 只给出警告；`mygo doctor` 把 Bun 列为可选；`devCommand` / `buildCommand` 只是普通命令。
+- vmark 用 pnpm，它的 6 个依赖补丁是 pnpm 的 `patchedDependencies` 格式，**可以原样迁入**；以后从 vmark 挑选改动时补丁也不用转换。
+- 测试用 vitest，本来就跑在 Node.js 上。
+
+约定：
+
+| 项 | 做法 |
+|---|---|
+| pnpm 版本 | `frontend/package.json` 的 `packageManager` 字段写死具体版本，通过 Corepack 启用（`corepack enable`）；CI 用同一版本 |
+| Node.js 版本 | 根目录 `.nvmrc` 写 24；`frontend/package.json` 的 `engines.node` 写 `>=22.6`，`frontend/.npmrc` 设 `engine-strict=true`（与 vmark 相同），版本不符时安装直接失败 |
+| 锁文件 | 提交 `frontend/pnpm-lock.yaml`；CI 一律 `pnpm install --frozen-lockfile` |
+| 依赖补丁 | 补丁文件放 `frontend/patches/`，在 `frontend/pnpm-workspace.yaml` 的 `patchedDependencies` 中登记。补丁按“包名@精确版本”匹配，被补丁的包在 `package.json` 中写**精确版本**（不带 `^`），升级时用 `pnpm patch` / `pnpm patch-commit` 重新生成。更换 pnpm 大版本时确认 `patchedDependencies` 的写法 |
+| 供应链 | 参照 vmark，在 `pnpm-workspace.yaml` 设 `minimumReleaseAge`（如 7 天），新发布的版本过了观察期才会被解析进锁文件 |
+| 依赖构建脚本 | 只允许确有需要的包执行安装脚本（pnpm 默认不执行依赖的 `postinstall`，需要的在 `onlyBuiltDependencies` 中列出） |
+| mygo 配置 | `mygo.config.ts` 由 Node.js 执行，因此只能用“可去除类型”的 TS 语法（不能用 `enum` 等），见 mygo `docs/configuration.md` |
+| 常用命令 | 根目录：`go tool mygo dev`、`go tool mygo build`、`go tool mygo generate`；`mygo.config.ts` 中 `devCommand: "pnpm -C frontend dev:web"`、`buildCommand: "pnpm -C frontend build:web"`。前端：`pnpm -C frontend test` / `typecheck` / `lint` |
+
+M0 的 V1 顺带确认：web 模板的项目用 `go tool mygo` 运行 CLI（mygo 文档只在 native 模板中示范了这种用法），以及 `mygo generate` 把客户端写到 `frontend/src/mygo.ts`（`frontend/package.json` 依赖 `mygo-runtime` 时的默认位置）。
+
 ## 2. 仓库结构
 
 ```
 litemd/
 ├── mygo.config.ts            # 应用名、标识、文件关联（只含 Markdown 扩展名）、更新、打包配置
-├── go.mod / main.go          # 入口：单实例、NewDocuments、菜单、协议、绑定
+├── go.mod / main.go          # 入口：单实例、NewDocuments、菜单、协议、绑定；go.mod 用 tool 指令固定 mygo CLI
+├── .nvmrc                    # Node.js 版本
 ├── internal/
 │   ├── doc/                  # MdContent、Read/Write、编码与换行符处理、另存为 UTF-8
 │   ├── session/              # Session 服务：内容同步（序号、脏标记、收齐）、文档操作包装
@@ -86,7 +111,10 @@ litemd/
 ├── locales/                  # Go 侧文案（mygo i18n）：zh-Hans.json、en.json
 ├── frontend/
 │   ├── package.json / vite.config.ts / tsconfig.json
-│   ├── patches/              # micromark、mdast-util-*、prosemirror-view 的补丁
+│   ├── pnpm-lock.yaml        # 提交
+│   ├── pnpm-workspace.yaml   # patchedDependencies、minimumReleaseAge 等 pnpm 设置
+│   ├── .npmrc                # engine-strict=true
+│   ├── patches/              # micromark、mdast-util-*、prosemirror-view 的补丁（pnpm 格式，迁自 vmark）
 │   └── src/
 │       ├── main.tsx          # 页面入口（路由：/ 文档、/start 启动窗口、/settings 设置）
 │       ├── mygo.ts           # mygo generate 生成的客户端（不手改）
@@ -357,7 +385,7 @@ mygo 只把已存在、且扩展名在 `fileAssociations` 里的文件交给 `On
 |---|---|---|---|
 | `src/utils/markdownPipeline/` | 非测试代码约 1.1 万行（含测试约 3.6 万行） | **整体迁入，连同测试**。不依赖 store，也不调用 Tauri，但依赖少量 `@/utils/*`（`debug`、`perfLog`、`markdownUrl`、`headingSlug`、`linebreaks`、`referenceIdentity`、`mediaPathDetection`、`videoProviderRegistry`）和 `@/lib/extensions/*`（`claim`、`pmConverterRegistry`），一并迁入 | F4、F2.5 |
 | `markdownPipeline/__tests__/fidelity/`、`characterization/` | — | 迁入，作为保真回归的起点（第 6.5 节） | 第 7 节验收 |
-| `patches/`：micromark、mdast-util-from-markdown、mdast-util-to-markdown、micromark-extension-gfm-autolink-literal、mdast-util-find-and-replace、prosemirror-view | 6 个补丁 | 迁入，改成 Bun 的补丁格式，**锁定依赖版本**（xterm 的补丁不迁） | 性能、病态输入 |
+| `patches/`：micromark、mdast-util-from-markdown、mdast-util-to-markdown、micromark-extension-gfm-autolink-literal、mdast-util-find-and-replace、prosemirror-view | 6 个补丁 | **原样迁入**（vmark 同为 pnpm 格式），登记到 `pnpm-workspace.yaml`；被补丁的包锁定为补丁对应的精确版本（xterm 的补丁不迁） | 性能、病态输入 |
 | `src/services/assembly/` 中的扩展装配 | 约 4000 行 | 参照它重写成 LiteMd 自己的装配（只取需要的扩展） | — |
 | `src/components/Editor/alignedTableNodes.ts`、`tiptapContentLoad.ts`、`tiptapInitialLoad.ts` 等工具 | 少量 | 迁入并去掉 store 依赖 | F4.2 |
 | `src/components/Editor/SourceEditor.tsx` + `sourceEditorExtensions.ts` | 约 450 行 | 参照重写 | F3.3、F5.7 |
@@ -544,5 +572,170 @@ interface Baseline {
 
 LiteMd 的文档页面是 mygo 意义上的“受信任页面”（可以调用绑定的 Go 方法），而它要渲染来自文件的、不可信的 HTML。主要防线：
 
+| 层 | 措施 |
+|---|---|
+| 内容过滤 | Markdown 中的原始 HTML 经过 DOMPurify 白名单过滤（迁自 vmark 的 `htmlSanitizer`）：去掉 `script`、`iframe`、`object`、`embed`、`form`、全部 `on*` 属性、`javascript:`/`vbscript:`/`data:text/html` 链接 |
+| CSP | 前端 `index.html` 设置 `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' lmasset: http://lmasset.localhost data: blob: https: http:; font-src 'self' data:; connect-src 'self' lmasset: http://lmasset.localhost; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`。即使过滤有漏洞，注入的脚本也不能执行。`unsafe-inline` 样式是 KaTeX 和 Mermaid 需要的。**关闭“加载网络图片”时**，页面在渲染任何文档内容之前追加一条不含 `http:` `https:` 的 `img-src` CSP（多条 CSP 同时生效，取最严格的交集） |
+| Mermaid | `securityLevel: "strict"`，渲染结果再过一遍 DOMPurify |
+| 导航 | `OnWillNavigate`：只允许前端自身的地址，其余一律取消；`http(s)` 交给 `Links.open` 用系统浏览器打开 |
+| 新窗口 | `SetWindowOpenHandler`：一律不在应用内开窗口；只有用户点击触发的 `http(s)` 才交给系统浏览器 |
+| 权限 | `SetPermissionHandler` 一律拒绝（摄像头、麦克风、定位、通知）：受信任页面在 mygo 中默认不经询问就能获得这些权限 |
+| 后端接口 | 绑定的方法很少，并且都按调用者窗口限定作用域：不提供“按任意路径读写”的接口；图片协议只提供图片类文件；写盘只发生在文档本身、文档目录下的 assets 目录、用户在保存对话框里选的路径 |
+| 拖入路径 | 页面传给 `Assets.importDropped` 的路径必须在本窗口最近一次 `OnFileDrop` 登记的集合里（Go 侧在 `OnFileDrop` 中记录，几秒后过期），被攻破的页面不能借此复制任意文件 |
+| 本地链接 | `Links.open` 打开非 Markdown 的本地文件前，确认框显示**完整路径**；可执行文件一律拒绝打开：`.app` `.exe` `.bat` `.cmd` `.com` `.msi` `.ps1` `.vbs` `.lnk` `.url` `.scr` `.sh` `.command` `.tool` `.scpt` `.jar` `.desktop` `.appimage`，以及 Unix 上带可执行权限的文件和目录 |
+| 网络图片单张加载 | `Assets.fetchImage` 只接受 `http(s)`，拒绝回环、内网、链路本地地址（防止借应用访问本机服务），只返回图片类型，上限 20 MB |
+| 导出与打印 | 导出 HTML 经过同样的过滤，不含任何脚本，文件内设 `default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'; font-src data:`。PDF 和打印：Go 把导出 HTML 处理成自包含的（本地图片转 base64、KaTeX 字体内嵌、Mermaid 已渲染成 SVG），在一个隐藏窗口中以 `PageOptions{Untrusted: true}` 载入后调用 `PrintToPDF` / `Print`。**必须设 `Untrusted`**：mygo 把不带 base URL 的 `LoadHTML`（`about:blank`）视为应用自己的受信任页面，可以调用全部绑定方法 |
+| 网络 | 除检查更新和网络图片（都可关闭）外，没有任何网络请求；不加载远程字体和脚本，所有资源都打包在本地 |
 
-[Showing lines 1-546 of 713 (50.0KB limit). Use offset=547 to continue.]
+## 8. 前端设计
+
+### 8.1 页面启动流程
+
+```
+main.tsx
+  → Session.ready()（拿到 docToken、assetBase、设置、按文件状态、只读/编码/恢复信息）
+  → 关闭网络图片时追加 CSP（第 7 节）
+  → Session.content()（拿到正文）
+  → 决定初始模式（D1：默认预览；或按文件记住的模式；Lossy 时强制预览；> 5 MB 默认源码，> 20 MB 只读源码）
+  → 渲染外壳和对应模式的编辑器，建立保真基线（第 6.2 节）
+  → 显示需要的提示条（恢复、只读、编码）
+  → 订阅事件：command / flush / settings-changed / onDocumentState / onDocumentReload / onFileDrop
+```
+
+**首屏速度（NF1）**：
+
+- 代码按模式拆包：预览和所见即所得共用 Tiptap 这一包；CodeMirror 单独一包；Mermaid、KaTeX 字体、highlight.js 语言包、导出模块全部懒加载。
+- 预览模式不加载 CodeMirror。
+- 首屏目标：已运行时打开新文件 < 400 ms，M0 实测。WebView 本身的创建开销（尤其 WebView2）是主要的不确定因素。
+
+### 8.2 四种模式
+
+| 模式 | 实现 | 切换 |
+|---|---|---|
+| 预览 | 与所见即所得**同一个 Tiptap 实例**，装全部扩展，`editable: false`。Tiptap 不能给运行中的实例追加扩展，所以预览不另装一套精简扩展；编辑类界面（浮动格式栏、链接编辑浮层、右键菜单中的编辑项、任务框勾选）在 `editable` 为假时不响应（F3.1、D15）。为此要检查迁入的 `taskToggle`、`formatToolbar`、`linkPopup`、`editorContextMenu` 等是否判断了 `view.editable`，没有的补上 | — |
+| 所见即所得 | 同上，`editable: true` | 与预览之间只切 `editable`，**不重新解析**，撤销历史保留 |
+| 源码 | CodeMirror 6 + `@codemirror/lang-markdown`、查找、多光标、自动配对、列表续写 | 进出规则见第 6.3 节。与所见即所得之间切换后，撤销历史从切换时开始（D15）：两种编辑器的历史无法互通 |
+| 分屏 | 左 CodeMirror、右只读 Tiptap。预览按防抖（200 ms，大文档 500 ms）整篇重新解析；按顶层块 key 复用节点，减少 DOM 变动 | 双向同步滚动：用块级“源码行号 ⇄ 预览块”映射（vmark 的 `sourceLineAttr`）。分屏时以 CodeMirror 文本为准，推送不经过保真层 |
+
+模式切换时的光标和滚动对齐（F3.6）复用 vmark 的 `cursorSync`。
+
+### 8.3 外壳组件
+
+- **状态栏**：模式切换、字数（F5.10，在 Web Worker 里统计，避免阻塞输入）、编码/只读标记；可隐藏。
+- **提示条**：外部修改冲突、文件被删除、只读、非 UTF-8（含「另存为 UTF-8」）、已恢复未保存的内容、“本次修改调整了全文格式”、“未命名文档请先保存再粘贴图片”、网络图片设置变更后的「重新载入」。
+- **大纲**（F7.1）：从 ProseMirror 文档（或源码模式下的 mdast）提取标题，点击跳转，滚动时高亮当前章节。
+- **查找替换**（F7.2/F7.3）：所见即所得用 vmark 的 `search` 扩展；源码用 CodeMirror 的 search；预览用同一个 `search` 扩展，替换按钮在 `editable` 为假时隐藏。
+- **设置窗口**：单独的 mygo 窗口（`URL: "/settings"`），同一个前端包内的另一个路由。
+- **启动窗口**：路由 `/start`，见第 3.3.1 节。
+
+### 8.4 国际化
+
+- Go 侧（菜单、对话框、LiteMd 自己的文案）：mygo i18n，`locales/zh-Hans.json`、`locales/en.json`。mygo 自身的文案（保存询问、冲突对话框、“未命名”）由 mygo 的 `zh-Hans` 翻译包提供，`mygo generate` 会按应用的语言自动引入。
+- 页面：i18next，扁平键名（沿用 vmark 的规范），只保留迁入组件实际用到的键。
+
+## 9. 测试策略
+
+| 层 | 工具 | 内容 |
+|---|---|---|
+| Go 单元测试 | `go test` | `MdContent` 读写（BOM、CRLF、UTF-16、GB18030）、另存为 UTF-8、资源协议的路径和类型校验、拖入路径登记、`fetchImage` 的地址过滤、图片落盘命名、命令行参数处理、设置迁移、LRU |
+| 同步协议（Go） | `go test` + mygo 的假后端 | 乱序到达的 `setContent`/`markDirty`、收齐超时、关窗与退出时监听器的顺序、退出流程不会反复询问 |
+| 管线与保真 | vitest（Node） | 第 6.5 节回归语料；vmark 迁入的管线测试一并迁入 |
+| 编辑器行为 | vitest + jsdom；关键用例用 Playwright WebKit | 输入规则、列表、表格、粘贴、模式切换前后文本不变、预览中任务框不可勾选 |
+| 同步协议（页面） | vitest + 假的 Go 客户端 | 只有用户编辑才推送、防抖、序号、收齐、重新载入时有未推送编辑的处理 |
+| 启动窗口 | mygo e2e + 手工 | 无文件启动、带文件启动不闪现、恢复副本启动、点 Dock、取消打开对话框 |
+| 端到端 | mygo e2e（macOS 桌面会话）+ 手工冒烟清单 | PRD 第 7 节第 4 条的冒烟项 |
+| 输入法 | 手工 | PRD 第 7 节第 5 条 |
+| 性能 | 脚本 + 基准文档（100 KB / 1 MB / 5 MB） | NF1–NF3：打开耗时、输入延迟（含保真序列化）、内存 |
+
+CI：PR 上跑 Go 测试、前端类型检查、lint、单元测试和保真回归，并在 macOS/Windows/Linux 上构建；`main` 分支保护要求这些全部通过。前端依赖统一用 `pnpm install --frozen-lockfile` 安装（Node.js 版本取 `.nvmrc`，pnpm 版本取 `packageManager`），并缓存 pnpm store。
+
+## 10. 里程碑与任务拆分
+
+### M0 技术验证（约 1 周）：每一项都给出“通过/不通过”的结论
+
+| # | 验证项 | 通过标准 | 不通过时的退路 |
+|---|---|---|---|
+| V1 | mygo `NewDocuments` + WebView 页面：一个文件一个窗口、单实例、Finder 双击打开、自动保存、恢复副本；工具链：`go tool mygo` 运行 CLI、Node.js 执行 `mygo.config.ts`、`mygo generate` 输出到 `frontend/src/mygo.ts` | macOS 和 Windows 上都正常 | 向 mygo 提 issue；必要时自己实现缺的部分 |
+| V2 | 第 5 节同步协议：序号、脏标记、关窗与退出收齐、退出流程与 mygo 的配合 | 快速输入后立即关窗、退出、切走焦点，内容都不丢；退出不出现重复询问；外部修改不冲掉未推送的输入 | 缩短防抖；必要时每次按键推送全文（只对小文档） |
+| V3 | 抽出 `markdownPipeline` 在 Node 下单独跑通（含 `@/utils` 等依赖和 pnpm 补丁）；第 4.3 节的方言调整；用 200 份语料测“解析 → 序列化”的往返情况 | 得到基线数据；方言用例通过 | — |
+| V4 | 第 6 节保真写回的原型：载入后不编辑没有差异；编辑后撤销逐字节回到原文；随机编辑的 diff 只落在改动块内 | 前两项 100%，第三项 ≥ 98% | 细化到列表项粒度，或改为以源码为主的编辑方式 |
+| V5 | Tiptap 和 CodeMirror 在 WKWebView、WebView2 下的中文输入法；菜单加速键与编辑器键位不重复触发 | 组字、候选框、快捷键都正常 | 针对性修补（vmark 的 compositionGuard 已覆盖一部分） |
+| V6 | 性能：冷启动、已运行时打开新文件、1 MB 文档输入延迟（含保真序列化）、单窗口内存 | 接近 NF1–NF3 | 调整预览实现（例如预览改为纯 HTML 渲染）或调整阈值 |
+| V7 | 启动窗口（第 3.3.1 节）：无文件启动、带文件启动、恢复副本启动、点 Dock、从启动窗口新建/打开/拖入、取消打开对话框、关闭启动窗口时的退出行为 | macOS、Windows 上都符合 F1.12；带文件启动时启动窗口不出现 | 调整等待时间；推动上游提供启动完成的回调 |
+| V8 | 编码与命令行：UTF-16/GB18030 只读打开并另存为 UTF-8；`litemd 不存在的文件.md`、`litemd a.txt` | 符合 F1.5、F2.6 | — |
+
+### mygo 能力缺口与上游需求
+
+| 缺口 | 影响 | v1 的做法 | 向上游提的需求 |
+|---|---|---|---|
+| 没有“启动打开流程结束”的回调 | F1.9 判断无文件启动 | 计数 + 短暂等待（第 3.3.1 节） | `Documents` 增加启动完成回调 |
+| 自动保存模式不能在运行中切换 | F2.2 | 重启生效（D11） | 运行中切换自动保存模式 |
+| 最近打开固定 10 个 | F1.6 | 接受（D8） | 可配置上限 |
+| 恢复副本静默恢复，应用无法直接得知 | F2.3 | 按“窗口创建时已编辑”推断（第 3.3 节） | 文档状态中加“从恢复副本恢复”标记 |
+| 命令行只投递已存在、已关联扩展名的文件 | F1.5 | `cli` 包自己处理（第 3.8 节） | — |
+| 没有新窗口层叠 | F1.8 | 自己计算位置 | — |
+
+### M1 MVP / alpha（约 3 周）
+
+1. 工程骨架：mygo 项目（`go tool mygo`）、Vite/React、pnpm（锁文件、补丁、engine-strict）、CI；启动窗口、命令行处理。
+2. Go：`MdContent` 读写与编码、窗口、Session/Assets/Links 服务、`lmasset` 协议、自建文件菜单和命令转发、同步协议与收齐。
+3. 前端：迁入管线（含方言调整）和第 4.4 节的 P0 扩展、宿主装配、`host` 适配层。
+4. 预览、所见即所得、源码三种模式及切换；保真写回层。
+5. 查找（F7.2）、状态栏、提示条（冲突、恢复、只读、编码）。
+6. 安全：DOMPurify、CSP、导航和新窗口拦截、权限拒绝、拖入路径校验、本地链接拦截。
+7. macOS 签名公证打包、Windows 安装包。
+
+### M2 beta（约 2 周）
+
+分屏与同步滚动、Mermaid（懒加载）、脚注、提示块、details、图片粘贴和拖入、网络图片开关与单张加载、大纲、替换、浮动格式栏、导出 HTML/PDF/打印（Untrusted 打印窗口）、深浅色和字号、设置窗口、自动更新、中英文界面、macOS 命令行工具安装。
+
+### v1.0（约 1 周）
+
+补齐保真语料并达标、性能测量与优化、冒烟与输入法验收、文档（README、下载页的 SmartScreen 说明）、正式图标（D5）、发布。
+
+## 11. 风险
+
+| 风险 | 影响 | 应对 |
+|---|---|---|
+| mygo 很年轻（v0.9），API 可能变化，平台上的边角问题未经大规模验证 | 中–高 | 锁定版本；M0 覆盖所有用到的能力；能力缺口见第 10 节的表，向上游提需求；必要时 fork 打补丁（MIT） |
+| LiteMd 依赖 mygo 的内部顺序（监听器注册顺序、`Window` 回调与 `attach` 的先后、启动流程） | 中 | 第 9 节的 Go 测试用 mygo 假后端把这些顺序固定下来；升级 mygo 时必跑 |
+| 保真写回达不到 98% | 高（D3 阻断发布） | M0 的 V4 先验证；vmark 管线自身的往返差异是主要来源；退路见第 10 节 |
+| vmark 上游迭代快、不收 PR | 中 | 迁入后单向挑选上游改动，不追求同步；迁入代码保留原目录结构，方便对比 |
+| vmark 依赖的补丁在依赖升级时失效 | 中 | 被补丁的包锁定精确版本；补丁有对应测试；升级依赖时用 `pnpm patch` 重新生成并专门处理 |
+| WebView 差异（WebView2、WebKitGTK）导致输入法、选区问题 | 中 | M0 的 V5；Linux 只做尽力支持 |
+| Windows 不签名带来的 SmartScreen 警告影响安装转化（D6） | 低–中 | 下载页说明；以后视用户量再申请证书 |
+| 每个窗口一个 WebView，开很多窗口时内存高 | 中 | NF3 测量；空闲窗口释放懒加载模块；大文档默认源码模式 |
+| 非 UTF-8 文件按 GB18030 显示，其他编码会乱码（D14） | 低 | 只读、不改原文件；以后视反馈加编码选择 |
+
+## 12. 许可
+
+- 本仓库：Apache-2.0。
+- 迁入的第三方代码：vmark（ISC）、mygo（MIT，作为依赖）、Tiptap/ProseMirror/CodeMirror/KaTeX/Mermaid/unified 生态/DOMPurify（MIT 或 Apache-2.0 等宽松许可）、`golang.org/x/text`（BSD-3-Clause）。都与 Apache-2.0 兼容。
+- `THIRD_PARTY.md` 列出所有迁入和打包的第三方代码、版本、许可和来源 commit；从 vmark 迁入的文件保留原版权声明。
+
+## 附录 A：v0.2 评审修订记录
+
+| 问题 | 修订位置 |
+|---|---|
+| `App.OnWindowCreated` 触发时文档尚未登记，启动窗口关不掉 | 第 3.3、3.3.1 节：在 `newDocWindow` 中关闭 |
+| `WhenReady` 早于命令行文件投递和恢复，带文件启动会闪出启动窗口 | 第 3.3.1 节：计数 + 等待；第 10 节上游需求 |
+| 绑定调用并发执行，`setContent` 可能乱序 | 第 5.2 节：序号 |
+| 退出监听排在 mygo 之后、退出时 `OnClose` 阻止会取消退出 | 第 5.3 节：先于 `NewDocuments` 注册；按序号判断是否需要收齐；退出时关窗放行 |
+| 外部修改会冲掉页面里未推送的输入 | 第 5.2、5.4 节：脏标记与重新载入时的竞态处理 |
+| 保真基线“重新解析重建”会让所有块失去身份 | 第 6.3 节第 6 步：基线直接用当前文档 |
+| 撤销后块不再是同一对象，被规范化重写 | 第 6.3 节第 1 步：`findDiffStart`/`findDiffEnd` 结构比较 |
+| 脚注重新编号会跨块修改 | 第 4.3 节：不装该 `appendTransaction` |
+| mdast 与 ProseMirror 顶层节点不一一对应 | 第 6.2 节：合并成单元 |
+| 每次推送整篇解析两遍，压垮 NF2 | 第 6.3 节第 5 步：局部校验 |
+| 退回整篇规范序列化时没有任何提示 | 第 6.3 节第 5 步、PRD F2.5⑤ |
+| 切换模式也推送，未编辑也可能写盘 | 第 5.1 节：只有用户编辑才推送 |
+| `Lossy` 时 `Write` 拒绝写入，另存为 UTF-8 走不通；GB18030 回退分支走不到 | 第 3.2 节：独立的 `saveAsUTF8`；按 D14 简化 |
+| PRD 与 mygo 不符：最近打开数量、另存为快捷键、`RoleFileMenu` 无法包装、自动保存开关、恢复提示、冲突对话框、命令行、`.txt`、层叠 | PRD D8–D12；第 3.1、3.6、3.7、3.8 节 |
+| vmark 方言与 F4.11、GFM 不符（`==`、`~`、`[[`、setext） | PRD D13；第 4.3 节 |
+| 打印窗口 `about:blank` 是受信任页面 | 第 7 节：`Untrusted` |
+| `lmasset` 在 Windows 上的 URL 形式 | 第 3.5 节、第 7 节 CSP |
+| 关闭网络图片只替换 `<img>`，拦不全 | 第 3.5 节、第 7 节：追加 CSP；`fetchImage` |
+| 打开本地文件、拖入路径由页面决定 | 第 7 节 |
+| 预览与所见即所得“共用实例”与“不装编辑扩展”矛盾；跨模式撤销 | 第 8.2 节、PRD D15 |
+| API 名称（`Resizable`、`Center`）、遗漏的 `setMenuState`、D7、过时的 `•` 注释 | 第 3.3.1、3.4 节；文首 |
+| 前端包管理用 Bun，与 vmark 的 pnpm 补丁格式不一致 | 第 1.1、1.2 节（v0.2.1）：改用 pnpm |
