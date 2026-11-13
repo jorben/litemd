@@ -132,6 +132,15 @@ export interface Settings {
   statusBar: boolean;
 }
 
+/** Status 是发给页面的更新状态。 */
+export interface Status {
+  /** idle / checking / none / downloading / ready / error / disabled */
+  state: string;
+  /** 新版本号 */
+  version: string;
+  message: string;
+}
+
 /** View 是页面看到的设置：外加自动保存在本次运行中是否生效。 */
 export interface View {
   version: number;
@@ -296,14 +305,46 @@ export const Export = {
   choosePath(defaultName: string, filters: Filter[]): Promise<string> {
     return call("Export.ChoosePath", defaultName, filters);
   },
+  /** HTML 弹保存对话框并写入导出的 HTML（F8.1）。返回写入的路径，取消时为空。 */
+  html(html: string, defaultName: string): Promise<string> {
+    return call("Export.HTML", html, defaultName);
+  },
+  /** PDF 弹保存对话框，在隐藏窗口里把导出的 HTML 打印成 PDF（F8.2：A4 或 Letter，浅色版式）。 */
+  pdf(html: string, defaultName: string, paper: string): Promise<string> {
+    return call("Export.PDF", html, defaultName, paper);
+  },
+  /** Print 用系统打印面板打印导出的 HTML（F8.3）。 */
+  print(html: string): Promise<void> {
+    return call("Export.Print", html);
+  },
   /** WriteChosen 把数据写到 ChoosePath 选择的路径（原子写入）。 */
   writeChosen(path: string, data: string): Promise<void> {
     return call("Export.WriteChosen", path, data);
   },
 } as const;
 
+/** Service 是绑定给页面的 Update 服务。 */
+export const Update = {
+  /** Check：关于页「检查更新」。 */
+  check(): Promise<void> {
+    return call("Update.Check");
+  },
+  /** Restart：提示条「立即重启」。先让 mygo 正常退出（收齐、保存或保留文档），再启动新版本。 */
+  restart(): Promise<void> {
+    return call("Update.Restart");
+  },
+  /** Status 返回当前更新状态（页面启动时取一次）。 */
+  status(): Promise<Status> {
+    return call("Update.Status");
+  },
+} as const;
+
 /** Service 是绑定给页面的 Settings 服务。 */
 export const Settings = {
+  /** AppVersion 返回应用版本（关于页）。 */
+  appVersion(): Promise<string> {
+    return call("Settings.AppVersion");
+  },
   /** Get 返回当前设置。 */
   get(): Promise<View> {
     return call("Settings.Get");
@@ -336,4 +377,8 @@ export const events = {
   flush: event<FlushRequest>("flush"),
   /** Changed 在设置改动后广播给所有窗口。 */
   settingsChanged: event<View>("settings-changed"),
+  /** ShowTab 让设置窗口切到某个分组（「关于 LiteMd」）。 */
+  settingsTab: event<string>("settings-tab"),
+  /** Changed 在更新状态变化时广播。 */
+  updateStatus: event<Status>("update-status"),
 } as const;

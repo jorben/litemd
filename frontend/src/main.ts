@@ -11,7 +11,9 @@ import "./shell/shell.css";
 import "@/i18n";
 import { docPage } from "./shell/doc";
 import { startPage } from "./shell/start";
+import { settingsPage } from "./shell/settings";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 if (location.hash === "#/start") void startPage(app);
+else if (location.hash === "#/settings") void settingsPage(app);
 else void docPage(app);

@@ -207,3 +207,9 @@ func (Service) Set(_ context.Context, s Settings) (View, error) {
 	_ = Changed.Broadcast(v)
 	return v, err
 }
+
+// ShowTab 让设置窗口切到某个分组（「关于 LiteMd」）。
+var ShowTab = mygo.NewEvent[string]("settings-tab")
+
+// AppVersion 返回应用版本（关于页）。
+func (Service) AppVersion(context.Context) string { return mygo.App.Version() }

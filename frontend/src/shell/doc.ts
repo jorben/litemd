@@ -4,7 +4,7 @@
 //   - 内容同步（第 5 节）：PageSync 只对用户编辑计数，失焦、切换模式、收齐时立即推送；
 //   - 状态栏、提示条、查找替换、大纲、菜单命令、快捷键、外观设置、按文件状态。
 import { onDocumentReload, onDocumentState, onFileDrop, type DocumentState } from "mygo-runtime";
-import { FileState, Session, Settings, Assets, events, type ReadyInfo } from "../mygo";
+import { Export, FileState, Session, Settings, Assets, Update, events, type ReadyInfo, type Status as UpdateStatus } from "../mygo";
 import { WysiwygEditor } from "../editor/wysiwyg";
 import { SourceEditor } from "../editor/source";
 import { PageSync } from "../sync/pageSync";
@@ -17,6 +17,7 @@ import { applyAppearance, stepFont, watchSystemTheme } from "./theme";
 import { bindFindToVmark, findState, onFind, replaceAllInWysiwyg, replaceCurrentInWysiwyg, setFind, stepFind } from "./find";
 import { commandForKey, Deduper } from "./keys";
 import { countWords, sourceHeadings } from "./text";
+import { buildExportHtml } from "./exportHtml";
 import { t } from "./i18n";
 
 export type Mode = "preview" | "wysiwyg" | "source" | "split";
@@ -396,6 +397,14 @@ export async function docPage(app: HTMLElement): Promise<void> {
     }
   });
   onHostCommand((id) => runCommand(id, "host"));
+  // F11.4：更新已下载，提示重启（未保存的内容由退出流程收齐、保存或保留）
+  const onUpdate = (u: UpdateStatus) => {
+    if (u.state !== "ready") return;
+    showBanner({ key: "update", kind: "info", title: t(`LiteMd ${u.version} 已下载`), detail: t("重启后完成更新，未保存的内容会先保存。"),
+      actions: [{ label: t("立即重启"), primary: true, run: async () => { await sync.push(); await Update.restart(); } }, { label: t("稍后"), run: () => {} }] });
+  };
+  events.updateStatus.on(onUpdate);
+  void Update.status().then(onUpdate).catch(() => {});
   window.addEventListener("blur", () => void sync.push());
   document.addEventListener("visibilitychange", () => void sync.push());
 
@@ -663,9 +672,9 @@ export async function docPage(app: HTMLElement): Promise<void> {
     "inline-code": () => wys((c) => c.toggleCode().run()),
     "clear-format": () => wys((c) => c.unsetAllMarks().run()),
     link: () => openLinkCreate(),
-    "export-html": () => exportUnavailable(),
-    "export-pdf": () => exportUnavailable(),
-    print: () => exportUnavailable(),
+    "export-html": () => void doExport("html"),
+    "export-pdf": () => void doExport("pdf"),
+    print: () => void doExport("print"),
   };
   for (const n of [1, 2, 3, 4, 5, 6] as const) commands[`heading-${n}`] = () => wys((c) => c.toggleHeading({ level: n }).run());
 
@@ -699,8 +708,55 @@ export async function docPage(app: HTMLElement): Promise<void> {
       showTextInput: from === to,
     });
   }
-  function exportUnavailable(): void {
-    showBanner({ key: "export", kind: "info", title: t("导出与打印将在下一个版本提供"), actions: [], closable: true });
+  // ---- 导出与打印（F8） ----
+  function exportOptions(kind: "html" | "pdf"): Promise<{ embed: boolean; paper: string } | null> {
+    return new Promise((resolve) => {
+      const dlg = document.createElement("dialog");
+      dlg.className = "lm-dialog";
+      dlg.innerHTML = kind === "html"
+        ? `<form method="dialog"><h3>${t("导出 HTML")}</h3><fieldset><legend>${t("本地图片")}</legend>
+            <label><input type="radio" name="img" value="embed" checked> ${t("内嵌到文件中")}</label>
+            <label><input type="radio" name="img" value="rel"> ${t("保留相对路径")}</label></fieldset>
+            <div class="acts"><button value="cancel" class="lm-btn">${t("取消")}</button><button value="ok" class="lm-btn primary">${t("导出…")}</button></div></form>`
+        : `<form method="dialog"><h3>${t("导出 PDF")}</h3><fieldset><legend>${t("纸张")}</legend>
+            <label><input type="radio" name="paper" value="a4" checked> A4</label>
+            <label><input type="radio" name="paper" value="letter"> Letter</label></fieldset>
+            <div class="acts"><button value="cancel" class="lm-btn">${t("取消")}</button><button value="ok" class="lm-btn primary">${t("导出…")}</button></div></form>`;
+      document.body.appendChild(dlg);
+      dlg.addEventListener("close", () => {
+        const f = new FormData(dlg.querySelector("form")!);
+        resolve(dlg.returnValue === "ok" ? { embed: f.get("img") !== "rel", paper: String(f.get("paper") ?? "a4") } : null);
+        dlg.remove();
+      });
+      dlg.showModal();
+    });
+  }
+  async function doExport(kind: "html" | "pdf" | "print"): Promise<void> {
+    const opts = kind === "print" ? { embed: true, paper: "a4" } : await exportOptions(kind);
+    if (!opts) return;
+    await sync.push();
+    // 源码 / 分屏中有改动：先让渲染视图跟上
+    if (source && source.text !== sourceEntry) {
+      rich.load(source.text);
+      sourceEntry = source.text;
+    }
+    const root = app.querySelector<HTMLElement>(".lm-rich .tiptap-editor:not(.lm-split-preview) .ProseMirror")!;
+    const base = info.assetBase;
+    const title = (state?.name ?? info.name).replace(/\.(md|markdown|mdown|mkd|txt)$/i, "");
+    try {
+      const html = await buildExportHtml(root, {
+        title,
+        embedImages: opts.embed,
+        originalSrc: (img) => {
+          const s0 = img.getAttribute("src") ?? "";
+          return s0.startsWith(base) ? decodeURIComponent(s0.slice(base.length)) : null;
+        },
+      });
+      const out = kind === "html" ? await Export.html(html, title) : kind === "pdf" ? await Export.pdf(html, title, opts.paper) : (await Export.print(html), "");
+      if (out) flash(t("已导出"));
+    } catch (err) {
+      showBanner({ key: "exportfail", kind: "danger", title: t("导出失败"), detail: String(err), actions: [], closable: true });
+    }
   }
 
   // 快捷键（捕获阶段先于编辑器键位；组字中不触发，NF9）
@@ -820,6 +876,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     page: "doc", info, sync, rich, readyAt: performance.timeOrigin + performance.now(),
     mode: () => mode, setMode, text: () => currentText(), source: () => source, state: () => state,
     run: (id: string) => runCommand(id), banners: () => banners.map((b) => b.key),
+    exportHtml: () => buildExportHtml(app.querySelector<HTMLElement>(".lm-rich .tiptap-editor:not(.lm-split-preview) .ProseMirror")!, { title: "t", embedImages: true }),
   };
 }
 

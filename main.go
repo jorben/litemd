@@ -10,6 +10,7 @@ import (
 
 	"github.com/jorben/litemd/internal/assets"
 	"github.com/jorben/litemd/internal/cli"
+	"github.com/jorben/litemd/internal/clitool"
 	"github.com/jorben/litemd/internal/doc"
 	"github.com/jorben/litemd/internal/export"
 	"github.com/jorben/litemd/internal/filestate"
@@ -18,6 +19,7 @@ import (
 	"github.com/jorben/litemd/internal/session"
 	"github.com/jorben/litemd/internal/settings"
 	"github.com/jorben/litemd/internal/start"
+	"github.com/jorben/litemd/internal/update"
 )
 
 func main() {
@@ -52,6 +54,7 @@ func main() {
 		NoUntitled:    true,                    // F1.9 / D7：不自动新建，显示启动窗口
 	})
 	cli.Install(func(p string) error { _, err := docs.Open(p); return err }, start.Expect) // F1.5
+	update.Install(func() bool { return settings.Default.Get().AutoUpdate })               // F11.4
 	start.Install(docs)                                                                    // F1.12
 	session.OpenPath = func(p string) error { _, err := docs.Open(p); return err }
 	installMenu()
@@ -61,6 +64,7 @@ func main() {
 	mygo.BindAs("Links", links.Service{})
 	mygo.BindAs("Shell", links.ShellService{})
 	mygo.BindAs("Export", export.Service{})
+	mygo.BindAs("Update", update.Service{})
 	mygo.BindAs("Settings", settings.Service{})
 	mygo.BindAs("FileState", filestate.Service{})
 	if err := mygo.App.Run(); err != nil {
@@ -134,9 +138,6 @@ func installMenu() {
 			}
 		}
 	}
-	notYet := func(id string) func(*mygo.Window) {
-		return func(*mygo.Window) { log.Printf("menu: %s 尚未实现（M2）", id) }
-	}
 	menu.Install(menu.Handlers{
 		"save":      docOp(func(d *session.Document) error { return d.Save() }),
 		"duplicate": docOp(func(d *session.Document) error { d.Duplicate(); return nil }),
@@ -157,12 +158,24 @@ func installMenu() {
 		"export-html":  toPage("export-html"),
 		"export-pdf":   toPage("export-pdf"),
 		"print":        toPage("print"),
-		"settings":     notYet("settings"),
-		"about":        notYet("about"),
-		"check-update": notYet("check-update"),
-		"install-cli":  notYet("install-cli"),
-		"help":         notYet("help"),
-		"syntax":       notYet("syntax"),
-		"keybindings":  notYet("keybindings"),
+		"settings":     func(*mygo.Window) { settings.ShowWindow(links.Harden) },
+		"about":        func(*mygo.Window) { settings.ShowWindow(links.Harden); _ = settings.ShowTab.Broadcast("about") },
+		"check-update": func(*mygo.Window) { go update.Check(true) },
+		"install-cli": func(*mygo.Window) {
+			go func() {
+				msg, detail := "已安装 litemd 命令", "之后可以在终端用 litemd 文件.md 打开文件。"
+				if err := clitool.Install(); err != nil {
+					msg, detail = "没有安装命令行工具", err.Error()
+				}
+				_, _ = mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageInfo, Message: msg, Detail: detail, Buttons: []string{"好"}})
+			}()
+		},
+		"help":        openURL("https://github.com/jorben/litemd#readme"),
+		"syntax":      openURL("https://github.github.com/gfm/"),
+		"keybindings": openURL("https://github.com/jorben/litemd/blob/master/docs/keybindings.md"),
 	})
+}
+
+func openURL(u string) func(*mygo.Window) {
+	return func(*mygo.Window) { go func() { _ = mygo.Shell.OpenExternal(u) }() }
 }

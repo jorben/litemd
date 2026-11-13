@@ -94,3 +94,36 @@ html, body { margin: 0; height: 100%; background: var(--bg-color); color: var(--
 .lm-start-btn.primary { background: var(--accent-primary); color: var(--contrast-text, #fff); box-shadow: none; }
 .lm-start-btn kbd { font: 12px var(--font-ui, system-ui); opacity: .7; }
 .lm-start-hint { margin-top: 18px; font-size: 12px; color: var(--text-tertiary); }
+
+/* 设置窗口 */
+.lm-settings { display: flex; flex-direction: column; font: 13px var(--font-ui, system-ui); }
+.lm-settings .tabs { flex: none; display: flex; justify-content: center; gap: 2px; padding: 10px 12px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
+.lm-settings .tabs button { min-width: 72px; padding: 6px 10px; border: 0; border-radius: 7px; background: none; color: var(--text-secondary); font: inherit; }
+.lm-settings .tabs button[aria-selected="true"] { background: var(--hover-bg); color: var(--accent-primary); font-weight: 600; }
+.lm-settings .body { flex: 1; overflow: auto; padding: 22px 34px 28px; }
+.lm-settings .row { display: grid; grid-template-columns: 160px 1fr; gap: 14px; padding: 9px 0; }
+.lm-settings .lbl { text-align: right; padding-top: 4px; }
+.lm-settings .ctl { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.lm-settings .help { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.5; }
+.lm-settings .help.warn { color: var(--warning-color, #8d5e00); }
+.lm-settings .help.plain { font-size: 12.5px; color: var(--text-secondary); }
+.lm-settings .sep { height: 1px; background: var(--border-color); margin: 8px 0 8px 174px; }
+.lm-settings select, .lm-settings input[type="text"] { height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--bg-color); color: var(--text-color); font: inherit; box-shadow: 0 0 0 1px var(--border-color); min-width: 200px; }
+.lm-settings label.chk { display: flex; gap: 8px; align-items: center; }
+.lm-settings input[type="checkbox"], .lm-settings input[type="radio"], .lm-settings input[type="range"] { accent-color: var(--accent-primary); }
+.lm-settings .inline { display: flex; gap: 10px; align-items: center; }
+.lm-settings .center { justify-content: center; margin-top: 14px; }
+.lm-settings .about { text-align: center; padding-top: 16px; }
+.lm-settings .about-icon { width: 84px; height: 84px; }
+.lm-settings .about h2 { margin: 10px 0 2px; font-size: 20px; }
+.lm-settings .about p { margin: 4px 0; color: var(--text-secondary); }
+.lm-settings .lic { margin-top: 18px; text-align: left; font-size: 12px; color: var(--text-secondary); background: var(--bg-secondary); padding: 10px 14px; border-radius: 8px; }
+
+/* 导出选项对话框 */
+.lm-dialog { border: 0; border-radius: 12px; padding: 18px 20px 14px; min-width: 300px; background: var(--bg-color); color: var(--text-color); box-shadow: var(--popup-shadow, 0 10px 30px rgba(0,0,0,.2)); font: 13px var(--font-ui, system-ui); }
+.lm-dialog::backdrop { background: rgba(0,0,0,.15); }
+.lm-dialog h3 { margin: 0 0 10px; font-size: 14px; }
+.lm-dialog fieldset { border: 0; padding: 0; margin: 0 0 14px; display: flex; gap: 14px; align-items: center; }
+.lm-dialog legend { float: left; margin-right: 10px; color: var(--text-secondary); }
+.lm-dialog label { display: inline-flex; gap: 6px; align-items: center; }
+.lm-dialog .acts { display: flex; justify-content: flex-end; gap: 8px; }
