@@ -64,15 +64,15 @@ export class WysiwygEditor {
    */
   private contentDoc(): PMNode {
     let doc = this.doc;
-    const base = this.baseline.doc;
-    const baseEndsEmpty = base.lastChild?.type.name === "paragraph" && base.lastChild.content.size === 0;
-    while (
-      !baseEndsEmpty &&
-      doc.childCount > 1 &&
-      doc.lastChild?.type.name === "paragraph" &&
-      doc.lastChild.content.size === 0
-    ) {
-      doc = doc.copy(doc.content.cut(0, doc.content.size - doc.lastChild.nodeSize));
+    const trailingEmpty = (d: PMNode) => {
+      let n = 0;
+      for (let i = d.childCount - 1; i >= 0 && d.child(i).type.name === "paragraph" && d.child(i).content.size === 0; i--) n++;
+      return n;
+    };
+    // 基线末尾原有的空段落要保留；空白文档解析出的那个空段落不算（它不对应任何原文）
+    const keep = this.baseline.source.trim() === "" ? 0 : trailingEmpty(this.baseline.doc);
+    while (doc.childCount > 1 && trailingEmpty(doc) > keep) {
+      doc = doc.copy(doc.content.cut(0, doc.content.size - doc.lastChild!.nodeSize));
     }
     return doc;
   }

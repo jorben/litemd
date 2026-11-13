@@ -161,6 +161,12 @@ export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNod
   const nc = doc.childCount;
   if (doc === base.doc || doc.eq(base.doc)) return { text: base.source, mode: "unchanged", units: [0, 0] };
 
+  // 0. 原文没有任何块（空白文档、新建文档）：没有可保留的原文，直接规范序列化，以一个换行结尾
+  if (nb === 0) {
+    const body = canonical(schema, childrenOf(doc, 0, nc));
+    return { text: body ? body + "\n" : "", mode: "local", units: [0, 0] };
+  }
+
   // 1. 公共前后缀（未改动的节点通常是同一对象，eq 先比较引用，耗时与改动量成正比）
   const min = Math.min(nb, nc);
   let p = 0;
