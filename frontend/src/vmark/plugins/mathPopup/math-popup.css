@@ -1,0 +1,91 @@
+/**
+ * Math Popup Styles
+ */
+
+/* Shell chrome comes from `.popup-container`. */
+.math-popup {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1-5);
+  padding: var(--space-2);
+  width: 360px;
+}
+
+.math-popup-input {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: var(--space-1-5) var(--space-2);
+  border: var(--border-thin) solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+/* Input focus: distinguishable border color (dialog input pattern) */
+.math-popup-input:focus,
+.math-popup-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--primary-color);
+}
+
+.math-popup-preview {
+  min-height: var(--space-8);
+  padding: var(--space-1-5) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--hover-bg);
+  color: var(--text-color);
+  font-size: var(--font-size-md);
+  overflow: hidden;
+}
+
+.math-popup-error {
+  min-height: var(--space-3-5);
+  color: var(--error-color);
+  font-size: var(--font-size-xs);
+}
+
+.math-popup-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.math-popup-btn {
+  padding: var(--space-1) var(--space-2-5);
+  border: var(--border-thin) solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
+}
+
+.math-popup-btn:hover {
+  background: var(--hover-bg);
+}
+
+.math-popup-btn-save {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.math-popup-btn:focus-visible {
+  outline: none;
+  position: relative;
+}
+
+.math-popup-btn:focus-visible::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--accent-primary);
+  border-radius: 1px;
+}

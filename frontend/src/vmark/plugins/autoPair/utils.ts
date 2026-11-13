@@ -1,0 +1,124 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/autoPair/utils.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Auto-Pair Utility Functions
+ *
+ * Purpose: Context-detection helpers that determine whether auto-pairing should
+ * fire — checks for code blocks, inline code, word boundaries, and escape chars.
+ *
+ * Key decisions:
+ *   - Smart quote suppression: auto-pair skips after word characters to avoid
+ *     turning apostrophes (it's) into opening quotes
+ *   - CJK word detection uses Unicode ranges to match Chinese, Japanese, Korean chars
+ *
+ * @coordinates-with handlers.ts — calls shouldAutoPair, isInCodeBlock, getCharAt, getCharBefore
+ * @module plugins/autoPair/utils
+ */
+
+import type { EditorState } from "@tiptap/pm/state";
+import { SMART_QUOTE_CHARS } from "./pairs";
+
+/**
+ * Check if the cursor is inside a code block.
+ */
+export function isInCodeBlock(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    // The production Tiptap schema names the node `codeBlock`. The previous
+    // snake_case `code_block` (plus a `fence` name no schema defines) matched
+    // nothing in the shipped editor, so this guard was silently dead.
+    if ($from.node(d).type.name === "codeBlock") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if the cursor is inside inline code mark.
+ */
+export function isInInlineCode(state: EditorState): boolean {
+  const { $from } = state.selection;
+  const marks = $from.marks();
+  return marks.some(
+    (mark) => mark.type.name === "inlineCode" || mark.type.name === "code"
+  );
+}
+
+/**
+ * Check if the character before the cursor is a word character.
+ * Used for smart quote detection (don't auto-pair after word chars).
+ */
+export function isAfterWordChar(state: EditorState, pos: number): boolean {
+  const textBefore = getCharBefore(state, pos);
+  if (!textBefore) return false;
+
+  // Match word characters (letters, numbers, underscore)
+  // Also match CJK characters
+  return /[\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(
+    textBefore
+  );
+}
+
+/**
+ * Check if auto-pairing should occur for the given character.
+ */
+export function shouldAutoPair(
+  state: EditorState,
+  pos: number,
+  char: string
+): boolean {
+  // Don't auto-pair in code blocks
+  if (isInCodeBlock(state)) return false;
+
+  // Don't auto-pair in inline code
+  if (isInInlineCode(state)) return false;
+
+  // Smart quote: don't pair after word character (it's an apostrophe)
+  if (SMART_QUOTE_CHARS.has(char) && isAfterWordChar(state, pos)) {
+    return false;
+  }
+
+  // Don't auto-pair if preceded by backslash (escaped)
+  if (getCharBefore(state, pos) === "\\") return false;
+
+  return true;
+}
+
+/**
+ * Get the character at a specific position in the document.
+ */
+export function getCharAt(state: EditorState, pos: number): string {
+  if (pos < 0 || pos >= state.doc.content.size) return "";
+
+  try {
+    const $pos = state.doc.resolve(pos);
+    return $pos.parent.textBetween(
+      $pos.parentOffset,
+      Math.min($pos.parentOffset + 1, $pos.parent.content.size),
+      ""
+    );
+  } catch {
+    /* v8 ignore next -- @preserve reason: catch is defensive against invalid ProseMirror positions; not reproducible with valid test documents */
+    return "";
+  }
+}
+
+/**
+ * Get the character before the cursor position.
+ */
+export function getCharBefore(state: EditorState, pos: number): string {
+  if (pos <= 0) return "";
+
+  try {
+    const $pos = state.doc.resolve(pos);
+    return $pos.parent.textBetween(
+      Math.max(0, $pos.parentOffset - 1),
+      $pos.parentOffset,
+      ""
+    );
+  } catch {
+    /* v8 ignore next -- @preserve reason: catch is defensive against invalid ProseMirror positions; not reproducible with valid test documents */
+    return "";
+  }
+}

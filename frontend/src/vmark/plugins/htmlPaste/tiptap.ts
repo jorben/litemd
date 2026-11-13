@@ -1,0 +1,174 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/htmlPaste/tiptap.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * HTML Paste Extension
+ *
+ * Purpose: Intercepts paste events with HTML content and converts to clean Markdown
+ * before inserting — handles content from Word, web pages, and rich text sources.
+ *
+ * Pipeline: paste event → smartPaste → markdownPaste → THIS → codePaste
+ *         → imageHandler → mediaHandler (`WYSIWYG_COMPOSITION_ORDER` in
+ *         services/assembly/compositionOrder.ts); in smart mode here: check for
+ *         substantial HTML → htmlToMarkdown → insert as markdown
+ *
+ * Key decisions:
+ *   - Only fires if no earlier handler claimed the paste
+ *   - Owns two of the three pasteMode values: "plain" inserts the clipboard's
+ *     text/plain verbatim, "smart" converts HTML to Markdown; "rich" returns
+ *     early and leaves the paste to Tiptap's native handling
+ *   - Uses isSubstantialHtml to filter out trivial HTML (plain text wrapped in `<p>`)
+ *   - Skips when cursor is inside a code block or with multi-cursor
+ *
+ * @coordinates-with utils/htmlToMarkdown.ts — HTML-to-Markdown conversion
+ * @coordinates-with shared/markdownPasteSlice.ts — creates the markdown insertion transaction
+ * @module plugins/htmlPaste/tiptap
+ */
+
+import { Extension } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
+import { htmlToMarkdown, isSubstantialHtml } from "@/utils/htmlToMarkdown";
+import { createMarkdownPasteTransaction } from "@/plugins/shared/markdownPasteSlice";
+import {
+  DEFAULT_PASTE_SETTINGS,
+  type PasteMode,
+  type PasteSettings,
+} from "@/plugins/shared/pasteSettings";
+import { isViewSelectionInCode, isViewMultiSelection } from "@/utils/pasteUtils";
+import { pasteWarn } from "@/utils/debug";
+
+const htmlPastePluginKey = new PluginKey("htmlPaste");
+
+/**
+ * Maximum HTML size to process (100KB).
+ * Larger content might be too expensive to convert.
+ */
+const MAX_HTML_SIZE = 100_000;
+
+function handlePaste(
+  view: EditorView,
+  event: ClipboardEvent,
+  getPasteSettings: () => PasteSettings,
+): boolean {
+  // Get paste mode setting
+  const settings = getPasteSettings();
+  const pasteMode: PasteMode = settings.pasteMode;
+
+  // If paste mode is "rich", let Tiptap handle it natively
+  if (pasteMode === "rich") {
+    return false;
+  }
+
+  // If paste mode is "plain", convert to plain text
+  if (pasteMode === "plain") {
+    const text = event.clipboardData?.getData("text/plain");
+    if (text) {
+      event.preventDefault();
+      const { from, to } = view.state.selection;
+      const tr = view.state.tr.insertText(text, from, to);
+      view.dispatch(tr.scrollIntoView());
+      return true;
+    }
+    return false;
+  }
+
+  // Smart mode: convert HTML to Markdown
+  const html = event.clipboardData?.getData("text/html");
+  const text = event.clipboardData?.getData("text/plain");
+
+  // No HTML content, let other handlers deal with it
+  if (!html) {
+    return false;
+  }
+
+  // HTML is too large, fall back to plain text
+  if (html.length > MAX_HTML_SIZE) {
+    pasteWarn("HTML too large, falling back to plain text");
+    if (text) {
+      event.preventDefault();
+      const { from, to } = view.state.selection;
+      const tr = view.state.tr.insertText(text, from, to);
+      view.dispatch(tr.scrollIntoView());
+      return true;
+    }
+    return false;
+  }
+
+  // Skip if in code block or code mark
+  if (isViewSelectionInCode(view)) {
+    return false;
+  }
+
+  // Skip if multi-cursor (let multi-cursor handler deal with it)
+  if (isViewMultiSelection(view)) {
+    return false;
+  }
+
+  // Check if HTML is substantial enough to warrant conversion
+  if (!isSubstantialHtml(html)) {
+    // Not substantial HTML, let markdown paste or default handle it
+    return false;
+  }
+
+  // Convert HTML to Markdown
+  const markdown = htmlToMarkdown(html);
+
+  // If conversion resulted in empty or very short content, fall back
+  if (!markdown || markdown.trim().length < 2) {
+    return false;
+  }
+
+  // If the markdown is just the same as plain text (no formatting gained),
+  // let other handlers deal with it
+  const trimmedMarkdown = markdown.trim();
+  const trimmedText = text?.trim() ?? "";
+  if (trimmedMarkdown === trimmedText) {
+    return false;
+  }
+
+  // Create transaction from parsed markdown
+  const preserveLineBreaks = settings.preserveLineBreaks;
+  const tr = createMarkdownPasteTransaction(view.state, markdown, {
+    preserveLineBreaks,
+  });
+
+  if (!tr) {
+    pasteWarn("Failed to create transaction from markdown");
+    return false;
+  }
+
+  event.preventDefault();
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/** Tiptap extension that converts pasted HTML to markdown before insertion. */
+/** Options for the htmlPaste extension. */
+export interface HtmlPasteOptions {
+  /**
+   * The user's paste behaviour, asked fresh on every paste.
+   *
+   * INJECTED — a plugin reaching the app's stores cannot ship as a standalone
+   * extension (ADR-015). A getter, not a value, so changing the setting takes
+   * effect without rebuilding the editor.
+   */
+  getPasteSettings: () => PasteSettings;
+}
+
+export const htmlPasteExtension = Extension.create<HtmlPasteOptions>({
+  name: "htmlPaste",
+  addOptions() {
+    return { getPasteSettings: () => DEFAULT_PASTE_SETTINGS };
+  },
+  addProseMirrorPlugins() {
+    const { getPasteSettings } = this.options;
+    return [
+      new Plugin({
+        key: htmlPastePluginKey,
+        props: {
+          handlePaste: (view, event) => handlePaste(view, event, getPasteSettings),
+        },
+      }),
+    ];
+  },
+});

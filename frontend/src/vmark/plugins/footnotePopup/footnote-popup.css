@@ -1,0 +1,60 @@
+/**
+ * Footnote Popup Styles
+ * Matches link-popup design: compact, borderless inputs, U-shaped focus indicator
+ */
+
+/* Shell chrome comes from `.popup-container`. */
+.footnote-popup {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 240px;
+  max-width: 320px;
+}
+
+
+/* Textarea - borderless style */
+.footnote-popup-textarea {
+  width: 100%;
+  min-height: var(--space-10);
+  max-height: 120px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  outline: none;
+  resize: none;
+  line-height: var(--line-height-base);
+}
+
+/* Input focus: caret is the primary indicator */
+.footnote-popup-textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+/* Keyboard focus: subtle background hint alongside caret */
+.footnote-popup-textarea:focus-visible {
+  outline: none;
+  background: var(--hover-bg);
+}
+
+.footnote-popup-textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: var(--opacity-muted);
+}
+
+/* Button row */
+.footnote-popup-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-half);
+}
+
+/* Save button - primary color on hover */
+
+/* Delete button - danger color on hover */
+

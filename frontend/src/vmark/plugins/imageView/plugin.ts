@@ -1,0 +1,292 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/imageView/plugin.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Image View Plugin
+ *
+ * Purpose: Custom NodeView for inline images. Renders a resolved asset:// URL
+ * while preserving the original relative path in the document for portability.
+ *
+ * Key decisions:
+ *   - Path resolution lives in `resolveSrc.ts`, not here: it is the only part
+ *     with branching logic, and it was untestable inside a NodeView
+ *   - Click selects the image node, double-click opens the image editing popup
+ *   - Right-click and click ask the HOST to open chrome, through `hostPopups`,
+ *     rather than reaching the app's popup stores (ADR-015)
+ *   - `decoding = "async"`, as block images: decode off the main thread
+ *   - The `src` is resolved and assigned only near the viewport, as block
+ *     images (#1565)
+ *
+ * @coordinates-with imageView/resolveSrc.ts — src → asset URL, and its tests
+ * @coordinates-with plugins/shared/hostPopups.ts — the chrome seam
+ * @coordinates-with shared/mediaSecurity.ts — URL classification
+ * @coordinates-with tiptap.ts — registers this NodeView for the image node type
+ * @coordinates-with shared/loadImageNearViewport.ts — when the fetch starts
+ * @coordinates-with blockImage/BlockImageNodeView.ts — similar logic for block-level images
+ * @module plugins/imageView/plugin
+ */
+
+import type { Editor } from "@tiptap/core";
+import type { Node } from "@tiptap/pm/model";
+import { NodeSelection } from "@tiptap/pm/state";
+import type { NodeView } from "@tiptap/pm/view";
+import { hostPopups } from "@/plugins/shared/hostPopups";
+import { isExternalUrl } from "../shared/mediaSecurity";
+import { loadImageNearViewport } from "../shared/loadImageNearViewport";
+import { imageViewWarn } from "@/utils/debug";
+import { resolveImageSrc, snapshotActiveFilePath } from "./resolveSrc";
+
+/**
+ * Custom NodeView for image nodes.
+ * Renders images with resolved asset URLs while keeping relative paths in the document.
+ */
+export class ImageNodeView implements NodeView {
+  dom: HTMLImageElement;
+  private originalSrc: string;
+  private getPos: () => number | undefined;
+  private editor: Editor;
+  private resolveRequestId = 0; // Track async requests to ignore stale responses
+  private destroyed = false;
+  /** The editor view's DOM; its scroll container decides when the image loads. */
+  private editorDom: Element | null;
+  private cancelLoad: (() => void) | null = null;
+  // Store active load handlers for cleanup
+  private activeLoadHandler: (() => void) | null = null;
+  private activeErrorHandler: (() => void) | null = null;
+
+  constructor(
+    node: Node,
+    getPos: () => number | undefined,
+    editor: Editor,
+    editorDom: Element | null = null,
+  ) {
+    this.getPos = getPos;
+    this.editor = editor;
+    this.editorDom = editorDom;
+    this.originalSrc = node.attrs.src ?? "";
+
+    // Create img element directly as dom (no wrapper)
+    // This simplifies DOM structure and helps with selection behavior
+    this.dom = document.createElement("img");
+    this.dom.className = "inline-image";
+    this.dom.decoding = "async"; // decode off the main thread, as block images do
+    this.dom.alt = node.attrs.alt ?? "";
+    this.dom.title = node.attrs.title ?? "";
+
+    // Set initial src and resolve if needed
+    this.updateSrc(this.originalSrc);
+
+    // Add context menu handler
+    this.dom.addEventListener("contextmenu", this.handleContextMenu);
+
+    // Add click handler for popup
+    this.dom.addEventListener("dblclick", this.handleClick);
+  }
+
+  private handleContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    const pos = this.getPos();
+    if (pos === undefined) return;
+
+    hostPopups.openImageMenu({
+      position: { x: e.clientX, y: e.clientY },
+      imageSrc: this.originalSrc,
+      imageNodePos: pos,
+    });
+  };
+
+  private handleClick = (_e: MouseEvent) => {
+    const pos = this.getPos();
+    if (pos === undefined) return;
+
+    // Set NodeSelection on this node for visual selection indicator
+    try {
+      const { view } = this.editor;
+      const selection = NodeSelection.create(view.state.doc, pos);
+      const tr = view.state.tr.setSelection(selection);
+      view.dispatch(tr.setMeta("addToHistory", false));
+    } catch {
+      // Ignore selection errors
+    }
+
+    // Get dimensions from the loaded image
+    const dimensions = this.dom.naturalWidth > 0
+      ? { width: this.dom.naturalWidth, height: this.dom.naturalHeight }
+      : null;
+
+    const rect = this.dom.getBoundingClientRect();
+    hostPopups.openMediaPopup({
+      mediaSrc: this.originalSrc,
+      mediaAlt: this.dom.alt ?? "",
+      mediaNodePos: pos,
+      mediaNodeType: "image",
+      mediaDimensions: dimensions,
+      anchorRect: {
+        top: rect.top,
+        left: rect.left,
+        bottom: rect.bottom,
+        right: rect.right,
+      },
+    });
+  };
+
+  private updateSrc(src: string): void {
+    // Bump on EVERY call, before the early returns: a local path still
+    // resolving must not override a newer external or empty source.
+    const requestId = ++this.resolveRequestId;
+    this.cancelLoad?.();
+    this.cancelLoad = null;
+    // The replaced image's late load/error must not judge the new source.
+    this.cleanupLoadHandlers();
+    // Reset states
+    this.dom.style.opacity = "1";
+    this.dom.classList.remove("image-loading", "image-error");
+
+    if (!src) {
+      this.dom.src = "";
+      this.showError("No image source");
+      return;
+    }
+
+    // External URLs can be used directly
+    if (isExternalUrl(src)) {
+      this.dom.classList.add("image-loading");
+      this.loadWhenNear(src);
+      return;
+    }
+
+    // Relative and absolute paths need resolution
+    // Show placeholder while resolving
+    this.dom.src = "";
+    this.dom.classList.add("image-loading");
+
+    // Whose document this is, read now: by the time the image nears the
+    // viewport, focus may be in the other pane of a split.
+    const documentPath = snapshotActiveFilePath();
+    this.cancelLoad = loadImageNearViewport(this.dom, this.editorDom, () =>
+      resolveImageSrc(src, documentPath).then((resolvedSrc) => {
+        // Ignore stale responses (src changed or view destroyed)
+        if (this.destroyed || requestId !== this.resolveRequestId) {
+          return;
+        }
+        if (!resolvedSrc) {
+          this.showError("Failed to resolve path");
+          return;
+        }
+        this.assignSrc(resolvedSrc);
+      }).catch((error: unknown) => {
+        imageViewWarn("resolveImageSrc failed:", error);
+        if (!this.destroyed && requestId === this.resolveRequestId) {
+          this.showError("Failed to resolve path");
+        }
+      }),
+    );
+  }
+
+  /** Set `src` once the image nears the viewport (#1565). */
+  private loadWhenNear(src: string): void {
+    this.cancelLoad = loadImageNearViewport(this.dom, this.editorDom, () => this.assignSrc(src));
+  }
+
+  private assignSrc(src: string): void {
+    this.dom.src = src;
+    this.setupLoadHandlers();
+  }
+
+  private cleanupLoadHandlers(): void {
+    if (this.activeLoadHandler) {
+      this.dom.removeEventListener("load", this.activeLoadHandler);
+      this.activeLoadHandler = null;
+    }
+    if (this.activeErrorHandler) {
+      this.dom.removeEventListener("error", this.activeErrorHandler);
+      this.activeErrorHandler = null;
+    }
+  }
+
+  private setupLoadHandlers(): void {
+    // Clean up any existing handlers first
+    this.cleanupLoadHandlers();
+
+    const onLoad = () => {
+      if (this.destroyed) return;
+      this.dom.classList.remove("image-loading", "image-error");
+      this.dom.style.opacity = "1";
+      this.cleanupLoadHandlers();
+    };
+
+    const onError = () => {
+      if (this.destroyed) return;
+      this.showError("Failed to load image");
+      this.cleanupLoadHandlers();
+    };
+
+    this.activeLoadHandler = onLoad;
+    this.activeErrorHandler = onError;
+    this.dom.addEventListener("load", onLoad);
+    this.dom.addEventListener("error", onError);
+  }
+
+  private showError(message: string): void {
+    this.dom.classList.remove("image-loading");
+    this.dom.classList.add("image-error");
+    this.dom.style.opacity = "0.5";
+    this.dom.title = `${message}: ${this.originalSrc}`;
+  }
+
+  update(node: Node): boolean {
+    if (node.type.name !== "image") {
+      return false;
+    }
+
+    this.dom.alt = node.attrs.alt ?? "";
+    this.dom.title = node.attrs.title ?? "";
+
+    const newSrc = node.attrs.src ?? "";
+    if (this.originalSrc !== newSrc) {
+      this.originalSrc = newSrc;
+      this.updateSrc(newSrc);
+    }
+
+    return true;
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.cancelLoad?.();
+    this.cleanupLoadHandlers();
+    this.dom.removeEventListener("contextmenu", this.handleContextMenu);
+    this.dom.removeEventListener("dblclick", this.handleClick);
+  }
+
+  /**
+   * Prevent ProseMirror from handling mouse events on the image.
+   * This stops the selection from expanding when clicking on images.
+   */
+  stopEvent(event: Event): boolean {
+    // Stop mousedown/click to prevent text selection
+    if (event.type === "mousedown" || event.type === "click") {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Called when this node is selected via NodeSelection.
+   * Add visual selection indicator.
+   */
+  selectNode(): void {
+    this.dom.classList.add("ProseMirror-selectednode");
+    // Clear native browser selection to prevent visual artifacts.
+    // NodeSelection in ProseMirror creates a DOM selection that visually
+    // extends from doc start to the node - we don't want that shown.
+    window.getSelection()?.removeAllRanges();
+  }
+
+  /**
+   * Called when this node is deselected.
+   * Remove visual selection indicator.
+   */
+  deselectNode(): void {
+    this.dom.classList.remove("ProseMirror-selectednode");
+  }
+}

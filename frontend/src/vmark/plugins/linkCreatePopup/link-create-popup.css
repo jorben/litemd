@@ -1,0 +1,59 @@
+/**
+ * Link Create Popup Styles
+ *
+ * Popup for creating new links (text + URL inputs).
+ */
+
+/* Shell chrome comes from `.popup-container`. */
+.link-create-popup {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1-5);
+}
+
+.dark-theme .link-create-popup {
+  box-shadow: var(--popup-shadow-dark);
+}
+
+.link-create-popup-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.link-create-popup-input {
+  flex: 1;
+  min-width: 200px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  outline: none;
+}
+
+.link-create-popup-input:focus {
+  background: var(--subtle-bg);
+}
+
+.link-create-popup-input:focus-visible {
+  outline: none;
+  background: var(--hover-bg);
+}
+
+.link-create-popup-input::placeholder {
+  color: var(--text-secondary);
+  opacity: var(--opacity-muted);
+}
+
+.link-create-popup-url {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* Buttons carry the canonical `.popup-icon-btn` — the byte-for-byte
+   duplicate recipe that lived here is gone; suffix classes remain as query
+   hooks only. */

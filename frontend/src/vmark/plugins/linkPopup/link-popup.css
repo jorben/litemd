@@ -1,0 +1,53 @@
+/**
+ * Link Popup Styles - Compact Inline Style
+ * Single-line popup: input + icon buttons
+ */
+
+/* Shell chrome comes from `.popup-container`. */
+.link-popup {
+  align-items: center;
+  gap: var(--space-half);
+}
+
+
+/* URL Input - borderless */
+.link-popup-input {
+  width: 200px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono, monospace);
+  outline: none;
+}
+
+/* focus: caret-only — borderless text input in a popup; the caret is the
+   indicator (.claude/rules/33-focus-indicators.md §2). */
+.link-popup-input:focus,
+.link-popup-input:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  /* Caret visibility indicates focus */
+}
+
+.link-popup-input::placeholder {
+  color: var(--text-secondary);
+  opacity: var(--opacity-muted);
+}
+
+/* Icon-only buttons */
+/* WI-DP4.1: `.link-popup-btn` was a byte-for-byte duplicate of
+   `.popup-icon-btn` (base, hover, active, focus-visible + its ::after underline,
+   and svg sizing), so it is gone and the buttons carry the canonical class. The
+   canonical is strictly better: it guards hover/active with `:not(:disabled)`
+   and defines a `:disabled` rule this copy lacked.
+
+   Only the two hover accents were ever distinct, and they duplicate
+   `.popup-icon-btn--primary` / `--danger`. Kept as suffix selectors rather than
+   swapped to the modifiers because `LinkPopupView` and its tests query by these
+   names; the declarations now match the canonical modifiers exactly. */
+
+/* Delete button - danger color on hover */
+

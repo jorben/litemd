@@ -1,0 +1,332 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/search/tiptap.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Search Plugin (WYSIWYG Mode)
+ *
+ * Purpose: Highlights find/replace matches in the WYSIWYG editor using ProseMirror
+ * decorations. Subscribes to the uiStore search slice for query/options and rebuilds decorations
+ * on every state change where the query or document differs.
+ *
+ * Pipeline: search-slice query change → rebuild decorations → highlight matches →
+ *           navigate via next/prev/replace dispatched from FindBar
+ *
+ * Key decisions:
+ *   - Decorations are rebuilt on doc/query/isOpen change, not on every
+ *     transaction (closing the FindBar clears highlights; reopening restores)
+ *   - setMatches() is deferred via queueMicrotask to avoid side-effects in apply()
+ *   - Store subscription uses field-by-field equality (not JSON.stringify)
+ *   - Replace operations live in replaceActions.ts: transactions are built
+ *     inside the imeGuard callback and re-validated against a fresh scan
+ *   - Regex mode catches invalid patterns gracefully (shows 0 matches, no error)
+ *   - Doc-change rebuilds are debounced by SEARCH_DOC_CHANGE_DEBOUNCE_MS (200ms) to
+ *     avoid rescanning the entire document on every keystroke; query/option changes
+ *     still trigger immediate rebuilds for responsive search-box feedback
+ *   - Only a query/option change starts at the first match. A doc-change rebuild
+ *     keeps the current match's place; a Replace rescans at once and resumes after
+ *     the inserted text (matchSelection.ts), so it never re-matches its own output
+ *
+ * @coordinates-with findMatches.ts — regex construction and match scanning (exact positions)
+ * @coordinates-with matchSelection.ts — which match is current after a rescan
+ * @coordinates-with replaceActions.ts — Replace Current / Replace All handlers
+ * @coordinates-with stores/uiStore/searchSlice.ts — query, options, match navigation state
+ * @coordinates-with FindBar.tsx — UI for find/replace controls
+ * @coordinates-with sourceEditorSearch.ts — equivalent search for Source mode (CodeMirror)
+ * @coordinates-with utils/settledScroll.ts — lands a far match despite content-visibility (#1458)
+ * @module plugins/search/tiptap
+ */
+import { hostSearch } from "@/plugins/shared/hostSearch";
+import { Extension } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { DecorationSet } from "@tiptap/pm/view";
+import { runOrQueueProseMirrorAction } from "@/utils/imeGuard";
+import { findMatchesInDoc, type Match } from "./findMatches";
+import { createQueryDebounce } from "./queryDebounce";
+import { createReplaceHandlers } from "./replaceActions";
+import { indexAtOrAfter, matchDecorations, SEARCH_RESUME_AFTER_META } from "./matchSelection";
+import "./search.css";
+import { scrollToSettled } from "@/utils/settledScroll";
+
+const searchPluginKey = new PluginKey("search");
+
+/** Meta key used to trigger a debounced full rebuild transaction from the timeout. */
+const SEARCH_DEBOUNCED_REBUILD_META = "searchDebouncedRebuild";
+
+/**
+ * Milliseconds to wait after a doc change before performing a full match re-scan.
+ * Query/option changes use SEARCH_QUERY_CHANGE_DEBOUNCE_MS (smaller).
+ */
+export const SEARCH_DOC_CHANGE_DEBOUNCE_MS = 200;
+
+/**
+ * Milliseconds to wait after the query (or options) changes before triggering
+ * a full rebuild. Coalesces rapid keystrokes in the FindBar input so we don't
+ * pay an O(doc) regex scan per character. Navigation (Enter, prev/next) and
+ * open/close still take effect immediately and flush any pending rebuild so
+ * the user always navigates against fresh matches.
+ */
+export const SEARCH_QUERY_CHANGE_DEBOUNCE_MS = 150;
+
+/** Tiptap extension that provides find/replace highlighting and navigation. */
+export const searchExtension = Extension.create({
+  name: "search",
+  addProseMirrorPlugins() {
+    let lastQuery = "";
+    let lastCaseSensitive = false;
+    let lastWholeWord = false;
+    let lastUseRegex = false;
+    let lastIsOpen = false;
+    let matches: Match[] = [];
+
+    // Debounce state: pending timeout ID and a weak reference to the view
+    // used to dispatch the deferred rebuild transaction.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const viewRef: { current: import("@tiptap/pm/view").EditorView | null } = { current: null };
+
+    return [
+      new Plugin({
+        key: searchPluginKey,
+        state: {
+          init() {
+            return { matches: [] as Match[], currentIndex: -1, decorationSet: DecorationSet.empty };
+          },
+          apply(tr, value) {
+            const state = hostSearch.current();
+            const queryChanged =
+              state.query !== lastQuery ||
+              state.caseSensitive !== lastCaseSensitive ||
+              state.wholeWord !== lastWholeWord ||
+              state.useRegex !== lastUseRegex;
+            // isOpen transitions must also trigger a rebuild: searchClose()
+            // keeps the query in the store, so closing with an unchanged
+            // query would otherwise leave highlights behind (and reopening
+            // would not restore them).
+            const isOpenChanged = state.isOpen !== lastIsOpen;
+            lastIsOpen = state.isOpen;
+            const active = state.isOpen || Boolean(state.query);
+            const visible = state.isOpen && Boolean(state.query);
+
+            // Full re-scan; `pick` chooses the current match (matchSelection.ts).
+            const fullRebuild = (pick: (found: Match[]) => number) => {
+              lastQuery = state.query;
+              lastCaseSensitive = state.caseSensitive;
+              lastWholeWord = state.wholeWord;
+              lastUseRegex = state.useRegex;
+
+              matches = findMatchesInDoc(
+                tr.doc,
+                state.query,
+                state.caseSensitive,
+                state.wholeWord,
+                state.useRegex
+              );
+
+              const matchCount = matches.length;
+              const currentIndex = pick(matches);
+              // Defer store update out of ProseMirror's apply() to avoid side-effects during state computation
+              queueMicrotask(() => {
+                hostSearch.reportMatches(matchCount, currentIndex);
+              });
+              const decorationSet = matchDecorations(tr.doc, matches, currentIndex, visible);
+              return { matches, currentIndex, decorationSet };
+            };
+            const cancelDebounce = () => {
+              if (debounceTimer !== null) clearTimeout(debounceTimer);
+              debounceTimer = null;
+            };
+
+            // Path 0 — a Replace: rescan now and resume after the inserted text.
+            const resumeAt: unknown = tr.getMeta(SEARCH_RESUME_AFTER_META);
+            if (typeof resumeAt === "number" && active) {
+              cancelDebounce();
+              return fullRebuild((found) => indexAtOrAfter(found, resumeAt));
+            }
+
+            // Path 1 — Debounce timer fired: rescan, keeping the current match's place.
+            if (tr.getMeta(SEARCH_DEBOUNCED_REBUILD_META) && active) {
+              debounceTimer = null;
+              const anchor = matches[state.currentIndex]?.from ?? null;
+              return fullRebuild((found) => indexAtOrAfter(found, anchor));
+            }
+
+            // Path 2 — Query/options changed or the FindBar opened/closed:
+            // immediate rebuild from the first match (close clears highlights,
+            // reopen restores them).
+            if ((queryChanged || isOpenChanged) && active) {
+              cancelDebounce();
+              return fullRebuild((found) => (found.length > 0 ? 0 : -1));
+            }
+
+            // Path 3 — Document changed while search is open (but query unchanged): debounce.
+            // Map existing decorations through the change to keep them roughly positioned,
+            // then schedule a full re-scan after SEARCH_DOC_CHANGE_DEBOUNCE_MS.
+            if (tr.docChanged && active) {
+              // Coalesce rapid edits: reset timer on each doc change
+              cancelDebounce();
+              debounceTimer = setTimeout(() => {
+                debounceTimer = null;
+                const view = viewRef.current;
+                if (!view || view.isDestroyed) return;
+                runOrQueueProseMirrorAction(view, () => {
+                  view.dispatch(view.state.tr.setMeta(SEARCH_DEBOUNCED_REBUILD_META, true));
+                });
+              }, SEARCH_DOC_CHANGE_DEBOUNCE_MS);
+
+              // Return mapped decorations and matches until the debounce fires.
+              // Map match positions so navigate/replace targets correct text.
+              const mappedDecorationSet = value.decorationSet.map(tr.mapping, tr.doc);
+              // The current match's place, mapped through the edit: if mapping
+              // collapses matches away, the index follows the place, not the slot.
+              const previous = matches[state.currentIndex];
+              const anchor = previous ? tr.mapping.map(previous.from) : null;
+              // Update the module-level matches cache so Path 4 reads correct positions
+              matches = matches
+                .map((m: Match) => ({ from: tr.mapping.map(m.from), to: tr.mapping.map(m.to) }))
+                .filter((m: Match) => m.from < m.to);
+              const adjustedIndex = previous
+                ? indexAtOrAfter(matches, anchor)
+                : state.currentIndex >= 0 && matches.length > 0 ? 0 : -1;
+              const mappedCount = matches.length;
+              queueMicrotask(() => {
+                hostSearch.reportMatches(mappedCount, adjustedIndex);
+              });
+              return { matches, currentIndex: adjustedIndex, decorationSet: mappedDecorationSet };
+            }
+
+            const currentIndex = state.currentIndex;
+
+            // Path 4 — No structural change; only update decorations if active index changed.
+            if (currentIndex !== value.currentIndex) {
+              const decorationSet = matchDecorations(tr.doc, matches, currentIndex, visible);
+              return { matches, currentIndex, decorationSet };
+            }
+
+            return { matches, currentIndex, decorationSet: value.decorationSet };
+          },
+        },
+        props: {
+          decorations(state) {
+            const pluginState = searchPluginKey.getState(state);
+            return pluginState?.decorationSet ?? DecorationSet.empty;
+          },
+        },
+        view(editorView) {
+          // Store the view reference so the debounce timer can dispatch into it
+          viewRef.current = editorView;
+          let lastScrollKey = "";
+
+          const scrollToMatch = () => {
+            const state = hostSearch.current();
+            if (!state.isOpen || state.currentIndex < 0) return;
+
+            const scrollKey = `${state.query}|${state.caseSensitive}|${state.wholeWord}|${state.useRegex}|${state.currentIndex}`;
+            if (scrollKey === lastScrollKey) return;
+
+            const pluginState = searchPluginKey.getState(editorView.state);
+            if (!pluginState || !pluginState.matches[state.currentIndex]) return;
+
+            const match = pluginState.matches[state.currentIndex];
+            lastScrollKey = scrollKey;
+
+            // Scroll container is .editor-content, not editorView.dom (.ProseMirror)
+            const scrollContainer = editorView.dom.closest(".editor-content") as HTMLElement | null;
+            if (!scrollContainer) return;
+            const coords = editorView.coordsAtPos(match.from);
+            const containerRect = scrollContainer.getBoundingClientRect();
+
+            if (coords.top < containerRect.top || coords.bottom > containerRect.bottom) {
+              scrollToSettled(scrollContainer, () => (match.from <= editorView.state.doc.content.size
+                ? editorView.coordsAtPos(match.from).top - scrollContainer.getBoundingClientRect().top - containerRect.height / 3
+                : null), editorView.dom);
+            }
+          };
+
+          // Transactions are built INSIDE the IME-guard callback and targets
+          // are re-validated at execution time — see replaceActions.ts.
+          const { replaceCurrent: handleReplaceCurrent, replaceAll: handleReplaceAll } =
+            createReplaceHandlers(editorView, () => searchPluginKey.getState(editorView.state));
+
+          let prevState = {
+            query: hostSearch.current().query,
+            caseSensitive: hostSearch.current().caseSensitive,
+            wholeWord: hostSearch.current().wholeWord,
+            useRegex: hostSearch.current().useRegex,
+            currentIndex: hostSearch.current().currentIndex,
+            isOpen: hostSearch.current().isOpen,
+          };
+
+          // Single debounce slot for query/options changes. Nav/open changes
+          // bypass it so user input feels instant; nav also flushes any
+          // pending rebuild first so it never operates on stale matches.
+          const queryDebounce = createQueryDebounce(SEARCH_QUERY_CHANGE_DEBOUNCE_MS);
+
+          const dispatchEmptyTransaction = () => {
+            if (editorView.isDestroyed) return;
+            runOrQueueProseMirrorAction(editorView, () =>
+              editorView.dispatch(editorView.state.tr),
+            );
+            requestAnimationFrame(scrollToMatch);
+          };
+
+          const unsubscribe = hostSearch.onChange(() => {
+            const state = hostSearch.current();
+            const currentState = {
+              query: state.query,
+              caseSensitive: state.caseSensitive,
+              wholeWord: state.wholeWord,
+              useRegex: state.useRegex,
+              currentIndex: state.currentIndex,
+              isOpen: state.isOpen,
+            };
+
+            const queryOptionsChanged =
+              currentState.query !== prevState.query ||
+              currentState.caseSensitive !== prevState.caseSensitive ||
+              currentState.wholeWord !== prevState.wholeWord ||
+              currentState.useRegex !== prevState.useRegex;
+
+            const navOrOpenChanged =
+              currentState.currentIndex !== prevState.currentIndex ||
+              currentState.isOpen !== prevState.isOpen;
+
+            if (!queryOptionsChanged && !navOrOpenChanged) return;
+
+            prevState = currentState;
+
+            if (navOrOpenChanged) {
+              // Force any pending query rebuild to fire first so navigation
+              // operates on fresh matches. The flush itself runs the same
+              // dispatchEmptyTransaction we'd otherwise call, so we only
+              // dispatch when nothing was pending — otherwise we'd double-
+              // dispatch and double-scroll for one user action.
+              if (!queryDebounce.flushIfPending()) {
+                dispatchEmptyTransaction();
+              }
+              return;
+            }
+
+            // Query/options change only: coalesce rapid keystrokes.
+            queryDebounce.schedule(dispatchEmptyTransaction);
+          });
+
+          window.addEventListener("search:replace-current", handleReplaceCurrent);
+          window.addEventListener("search:replace-all", handleReplaceAll);
+
+          return {
+            destroy() {
+              // Clear pending debounce timers so they won't dispatch into a destroyed view
+              if (debounceTimer !== null) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+              }
+              queryDebounce.cancel();
+              viewRef.current = null;
+              unsubscribe();
+              window.removeEventListener("search:replace-current", handleReplaceCurrent);
+              window.removeEventListener("search:replace-all", handleReplaceAll);
+            },
+          };
+        },
+      }),
+    ];
+  },
+});

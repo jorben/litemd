@@ -11,6 +11,7 @@ import (
 	"github.com/jorben/litemd/internal/assets"
 	"github.com/jorben/litemd/internal/cli"
 	"github.com/jorben/litemd/internal/doc"
+	"github.com/jorben/litemd/internal/export"
 	"github.com/jorben/litemd/internal/filestate"
 	"github.com/jorben/litemd/internal/links"
 	"github.com/jorben/litemd/internal/menu"
@@ -59,6 +60,7 @@ func main() {
 	mygo.BindAs("Assets", assets.Service{})
 	mygo.BindAs("Links", links.Service{})
 	mygo.BindAs("Shell", links.ShellService{})
+	mygo.BindAs("Export", export.Service{})
 	mygo.BindAs("Settings", settings.Service{})
 	mygo.BindAs("FileState", filestate.Service{})
 	if err := mygo.App.Run(); err != nil {

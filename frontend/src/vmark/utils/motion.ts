@@ -1,0 +1,27 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/utils/motion.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Motion policy — ONE owner for the "should this animate?" decision.
+ *
+ * Purpose: CSS motion collapses globally under `prefers-reduced-motion`
+ * (see index.css), but JS-driven smooth scrolling bypasses CSS entirely —
+ * `scrollTo({ behavior: "smooth" })` animates regardless. Every such call
+ * goes through `scrollBehavior()`; an eslint `no-restricted-syntax` rule
+ * forbids the literal outside this module.
+ *
+ * @module utils/motion
+ */
+
+/** Whether the OS asks for reduced motion. False where matchMedia is absent (jsdom, SSR). */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+/** The scroll behavior honouring the OS preference. */
+export function scrollBehavior(): ScrollBehavior {
+  return prefersReducedMotion() ? "auto" : "smooth";
+}

@@ -27,13 +27,33 @@
     "paths": {
       "@/*": [
         "./src/vmark/*"
+      ],
+      "@tauri-apps/api/core": [
+        "./src/host/tauri/api-core.ts"
+      ],
+      "@tauri-apps/api/path": [
+        "./src/host/tauri/api-path.ts"
+      ],
+      "@tauri-apps/api/webviewWindow": [
+        "./src/host/tauri/api-webviewWindow.ts"
+      ],
+      "@tauri-apps/plugin-dialog": [
+        "./src/host/tauri/plugin-dialog.ts"
+      ],
+      "@tauri-apps/plugin-fs": [
+        "./src/host/tauri/plugin-fs.ts"
+      ],
+      "@tauri-apps/plugin-clipboard-manager": [
+        "./src/host/tauri/plugin-clipboard-manager.ts"
       ]
     }
   },
   "include": [
     "src",
     "test",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "vite.config.ts",
+    "aliases.ts"
   ],
   "exclude": [
     "src/vmark/**/*.test.ts",

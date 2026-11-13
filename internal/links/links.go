@@ -191,6 +191,14 @@ func (ShellService) CopyPath(ctx context.Context) error {
 	return nil
 }
 
+// ReadClipboardText 读取剪贴板文本（vmark markdownPaste 的「粘贴为 Markdown」用）。
+func (ShellService) ReadClipboardText(ctx context.Context) (string, error) {
+	if mygo.CallerWindow(ctx) == nil {
+		return "", session.ErrNoDocument
+	}
+	return mygo.Clipboard.ReadText(), nil
+}
+
 // SameOrigin 报告 target 是否与 current 同源（scheme + host + port）。
 func SameOrigin(current, target string) bool {
 	a, err1 := url.Parse(current)

@@ -1,0 +1,139 @@
+/**
+ * Lowlight (highlight.js) syntax highlighting for WYSIWYG code blocks.
+ *
+ * D11: a ROLE MAP onto the per-theme `--syntax-*` tokens
+ * (ThemeTokens.syntax, emitted by applyTheme; static paper/night fallback in
+ * index.css) — this file contains ZERO colour literals, so a retint is a
+ * catalog edit and light/dark need no second rule set. It also covers the
+ * scopes GitHub's own stylesheet styles that the old hand-copy omitted
+ * (CSS selectors, `this`, params, subst, sections, bullets, diffs, …), so a
+ * highlighted language no longer degrades to plain text on those tokens.
+ *
+ * `hljsSyntax.test.ts` pins the scope coverage and the no-literals property.
+ */
+
+/* keyword — control flow, storage, language keywords */
+.tiptap-editor pre code .hljs-keyword,
+.tiptap-editor pre code .hljs-selector-tag,
+.tiptap-editor pre code .hljs-literal,
+.tiptap-editor pre code .hljs-doctag,
+.tiptap-editor pre code .hljs-template-tag,
+.tiptap-editor pre code .hljs-variable.language_ {
+  color: var(--syntax-keyword);
+}
+
+/* function / section titles */
+.tiptap-editor pre code .hljs-title,
+.tiptap-editor pre code .hljs-title.function_,
+.tiptap-editor pre code .hljs-title.function_.invoke__,
+.tiptap-editor pre code .hljs-section {
+  color: var(--syntax-function);
+}
+
+/* types and class names; CSS selector forms behave as types */
+.tiptap-editor pre code .hljs-type,
+.tiptap-editor pre code .hljs-title.class_,
+.tiptap-editor pre code .hljs-title.class_.inherited__,
+.tiptap-editor pre code .hljs-selector-class,
+.tiptap-editor pre code .hljs-selector-id,
+.tiptap-editor pre code .hljs-selector-attr,
+.tiptap-editor pre code .hljs-selector-pseudo {
+  color: var(--syntax-type);
+}
+
+/* attributes */
+.tiptap-editor pre code .hljs-attr,
+.tiptap-editor pre code .hljs-attribute {
+  color: var(--syntax-attribute);
+}
+
+/* numbers and symbols; list bullets in markup */
+.tiptap-editor pre code .hljs-number,
+.tiptap-editor pre code .hljs-symbol,
+.tiptap-editor pre code .hljs-bullet {
+  color: var(--syntax-number);
+}
+
+/* strings; regexes; single chars; formulas */
+.tiptap-editor pre code .hljs-string,
+.tiptap-editor pre code .hljs-regexp,
+.tiptap-editor pre code .hljs-char.escape_,
+.tiptap-editor pre code .hljs-formula {
+  color: var(--syntax-string);
+}
+
+/* comments */
+.tiptap-editor pre code .hljs-comment,
+.tiptap-editor pre code .hljs-quote {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+/* operators and punctuation */
+.tiptap-editor pre code .hljs-operator {
+  color: var(--syntax-operator);
+}
+
+.tiptap-editor pre code .hljs-punctuation {
+  color: var(--syntax-punctuation);
+}
+
+/* markup tags and names */
+.tiptap-editor pre code .hljs-name,
+.tiptap-editor pre code .hljs-tag {
+  color: var(--syntax-tag);
+}
+
+/* built-ins and constants */
+.tiptap-editor pre code .hljs-built_in,
+.tiptap-editor pre code .hljs-builtin-name,
+.tiptap-editor pre code .hljs-meta .hljs-keyword {
+  color: var(--syntax-constant);
+}
+
+/* variables; params; template substitutions; object properties */
+.tiptap-editor pre code .hljs-variable,
+.tiptap-editor pre code .hljs-template-variable,
+.tiptap-editor pre code .hljs-params,
+.tiptap-editor pre code .hljs-subst {
+  color: var(--syntax-variable);
+}
+
+.tiptap-editor pre code .hljs-property {
+  color: var(--syntax-property);
+}
+
+/* escapes and meta lines */
+.tiptap-editor pre code .hljs-meta {
+  color: var(--syntax-escape);
+}
+
+.tiptap-editor pre code .hljs-meta .hljs-string {
+  color: var(--syntax-string);
+}
+
+/* links */
+.tiptap-editor pre code .hljs-link {
+  color: var(--syntax-link);
+  text-decoration: underline;
+}
+
+/* diffs: colour + tint from the semantic tokens */
+.tiptap-editor pre code .hljs-addition {
+  color: var(--syntax-tag);
+  background-color: color-mix(in srgb, var(--success-color) 12%, transparent);
+}
+
+.tiptap-editor pre code .hljs-deletion {
+  color: var(--syntax-invalid);
+  background-color: color-mix(in srgb, var(--error-color) 12%, transparent);
+}
+
+/* prose emphasis inside markup highlighting */
+.tiptap-editor pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+.tiptap-editor pre code .hljs-strong {
+  font-weight: bold;
+}

@@ -1,0 +1,50 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/linkCreatePopup/tiptap.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Link Create Popup Tiptap Extension
+ *
+ * Registers the link create popup view with the editor.
+ *
+ * @module plugins/linkCreatePopup/tiptap
+ */
+
+import { Extension } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { StoreApi } from "@/plugins/shared/types";
+import { LinkCreatePopupView, type LinkCreatePopupState } from "./LinkCreatePopupView";
+import { requirePort } from "@/plugins/shared/requirePort";
+
+const linkCreatePopupPluginKey = new PluginKey("linkCreatePopup");
+
+/** Tiptap extension that shows a popup for creating new links from selected text. */
+/** Options for the link-create popup extension. */
+export interface LinkCreatePopupOptions {
+  /** The popup state this plugin drives — a PORT, not the app's store. */
+  store: StoreApi<LinkCreatePopupState> | undefined;
+}
+
+export const linkCreatePopupExtension = Extension.create<LinkCreatePopupOptions>({
+  name: "linkCreatePopup",
+
+  // No default: there is no sensible stand-in for the state a popup drives.
+  addOptions() {
+    return { store: undefined };
+  },
+
+  addProseMirrorPlugins() {
+    const store = requirePort(this.options.store, "linkCreatePopupExtension", "store");
+    return [
+      new Plugin({
+        key: linkCreatePopupPluginKey,
+        view: (view) => {
+          // The popup declares its own state PORT; the host supplies a store that
+          // satisfies it (ADR-015).
+          const popupView = new LinkCreatePopupView(view, store);
+          return {
+            destroy: () => popupView.destroy(),
+          };
+        },
+      }),
+    ];
+  },
+});

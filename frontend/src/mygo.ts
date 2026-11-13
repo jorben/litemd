@@ -23,6 +23,12 @@ export interface FileState {
   scroll?: number;
 }
 
+/** Filter 是保存对话框的文件类型。 */
+export interface Filter {
+  name: string;
+  extensions: string[];
+}
+
 /** FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。 */
 export interface FlushRequest {
   n: number;
@@ -224,9 +230,25 @@ export const Shell = {
   copyPath(): Promise<void> {
     return call("Shell.CopyPath");
   },
+  /** ReadClipboardText 读取剪贴板文本（vmark markdownPaste 的「粘贴为 Markdown」用）。 */
+  readClipboardText(): Promise<string> {
+    return call("Shell.ReadClipboardText");
+  },
   /** RevealInFolder 在访达 / 资源管理器中显示文档本身，或文档引用的文件（ref 为空时为文档）。 */
   revealInFolder(ref: string): Promise<void> {
     return call("Shell.RevealInFolder", ref);
+  },
+} as const;
+
+/** Service 是绑定给文档页面的 Export 服务。 */
+export const Export = {
+  /** ChoosePath 弹保存对话框，返回用户选择的路径（取消时为空字符串）。 */
+  choosePath(defaultName: string, filters: Filter[]): Promise<string> {
+    return call("Export.ChoosePath", defaultName, filters);
+  },
+  /** WriteChosen 把数据写到 ChoosePath 选择的路径（原子写入）。 */
+  writeChosen(path: string, data: string): Promise<void> {
+    return call("Export.WriteChosen", path, data);
   },
 } as const;
 

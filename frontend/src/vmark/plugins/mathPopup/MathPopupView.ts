@@ -1,0 +1,216 @@
+// Migrated from xiaolai/vmark@01bf9f4 src/plugins/mathPopup/MathPopupView.ts
+// Copyright (c) 2026 Xiaolai Li. ISC License (see THIRD_PARTY.md).
+/**
+ * Math Popup View
+ *
+ * DOM management for the inline math editing popup with live KaTeX preview.
+ * Extends WysiwygPopupView for common popup lifecycle management.
+ *
+ * @module plugins/mathPopup/MathPopupView
+ */
+
+import i18n from "@/i18n";
+import { isImeKeyEvent } from "@/utils/imeGuard";
+import { loadKatex } from "@/plugins/shared/katexLoader";
+import { renderWarn } from "@/utils/debug";
+import { errorMessage } from "@/utils/errorMessage";
+import type { StoreApi } from "zustand";
+import { WysiwygPopupView, type EditorViewLike, type PopupStoreBase } from "@/plugins/shared";
+
+const DEFAULT_POPUP_WIDTH = 360;
+const DEFAULT_POPUP_HEIGHT = 200;
+
+/**
+ * The popup state this view needs — the plugin's PORT, declared here.
+ *
+ * Not imported from the app's store. The boundary is not "no shape
+ * dependency" — a math popup intrinsically needs a latex string and a way to
+ * update it, and hiding that would be fake decoupling. It is "the plugin
+ * declares the shape it needs, and the host adapts to it".
+ */
+export interface MathPopupState extends PopupStoreBase {
+  latex: string;
+  nodePos: number | null;
+  updateLatex: (latex: string) => void;
+}
+
+export class MathPopupView extends WysiwygPopupView<MathPopupState> {
+  private renderToken = 0;
+
+  constructor(view: EditorViewLike, store: StoreApi<MathPopupState>) {
+    super(view, store);
+  }
+
+  // Lazy getters for DOM elements (avoids constructor timing issues)
+  private get textarea(): HTMLTextAreaElement {
+    return this.container.querySelector(".math-popup-input") as HTMLTextAreaElement;
+  }
+
+  private get preview(): HTMLElement {
+    return this.container.querySelector(".math-popup-preview") as HTMLElement;
+  }
+
+  private get error(): HTMLElement {
+    return this.container.querySelector(".math-popup-error") as HTMLElement;
+  }
+
+  protected buildContainer(): HTMLElement {
+    const container = this.createShell("math-popup");
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "math-popup-input";
+    textarea.placeholder = i18n.t("editor:popup.math.input.placeholder");
+    textarea.rows = 3;
+    textarea.addEventListener("input", () => this.handleInputChange());
+    textarea.addEventListener("keydown", (e) => this.handleTextareaKeydown(e));
+
+    const preview = document.createElement("div");
+    preview.className = "math-popup-preview";
+
+    const error = document.createElement("div");
+    error.className = "math-popup-error";
+
+    const buttons = document.createElement("div");
+    buttons.className = "math-popup-buttons";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "math-popup-btn math-popup-btn-cancel";
+    cancelBtn.textContent = i18n.t("editor:popup.math.cancel");
+    cancelBtn.addEventListener("click", () => this.handleCancel());
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "math-popup-btn math-popup-btn-save";
+    saveBtn.textContent = i18n.t("editor:popup.math.save");
+    saveBtn.addEventListener("click", () => this.handleSave());
+
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(saveBtn);
+
+    container.appendChild(textarea);
+    container.appendChild(preview);
+    container.appendChild(error);
+    container.appendChild(buttons);
+
+    return container;
+  }
+
+  protected override getPopupDimensions() {
+    const rect = this.container.getBoundingClientRect();
+    return {
+      width: rect.width || DEFAULT_POPUP_WIDTH,
+      height: rect.height || DEFAULT_POPUP_HEIGHT,
+      gap: 8,
+      preferAbove: true,
+    };
+  }
+
+  protected onShow(state: MathPopupState): void {
+    this.textarea.value = state.latex;
+    this.renderPreview(state.latex);
+
+    requestAnimationFrame(() => {
+      this.textarea.focus();
+      this.textarea.select();
+    });
+  }
+
+  protected onHide(): void {
+    // No special cleanup needed
+  }
+
+  /**
+   * Click-outside commits the edit, as the Source math popup does. The base
+   * default would discard the textarea content the user just typed.
+   */
+  protected override onClickOutside(): void {
+    this.handleSave();
+  }
+
+  private renderPreview(latex: string): void {
+    const trimmed = latex.trim();
+    this.error.textContent = "";
+
+    // Every render request invalidates any pending async render — including
+    // the empty-input case, so a stale loadKatex resolve can't overwrite a
+    // preview that was just cleared.
+    const token = ++this.renderToken;
+
+    if (!trimmed) {
+      this.preview.textContent = "";
+      return;
+    }
+
+    loadKatex()
+      .then((katex) => {
+        if (token !== this.renderToken) return;
+        try {
+          katex.default.render(trimmed, this.preview, {
+            throwOnError: true,
+            displayMode: false,
+          });
+        } catch {
+          this.preview.textContent = trimmed;
+          this.error.textContent = i18n.t("editor:popup.math.invalidLatex");
+        }
+      })
+      .catch((error: unknown) => {
+        if (token !== this.renderToken) return;
+        renderWarn("LaTeX preview failed:", errorMessage(error));
+        this.preview.textContent = trimmed;
+        this.error.textContent = i18n.t("editor:popup.math.previewFailed");
+      });
+  }
+
+  private handleInputChange(): void {
+    const value = this.textarea.value;
+    this.store.getState().updateLatex(value);
+    this.renderPreview(value);
+  }
+
+  private handleTextareaKeydown(e: KeyboardEvent): void {
+    if (isImeKeyEvent(e)) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.handleCancel();
+      return;
+    }
+
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      this.handleSave();
+    }
+  }
+
+  private handleSave(): void {
+    const state = this.store.getState();
+    const { nodePos, latex } = state;
+    if (nodePos === null) return;
+
+    const { state: editorState, dispatch } = this.editorView;
+    const node = editorState.doc.nodeAt(nodePos);
+    if (!node || node.type.name !== "math_inline") {
+      state.closePopup();
+      return;
+    }
+
+    // An unchanged formula needs no transaction: dispatching one would dirty
+    // the document and add an undo step for every click-away.
+    if (node.attrs.content !== latex) {
+      dispatch(
+        editorState.tr.setNodeMarkup(nodePos, undefined, {
+          ...node.attrs,
+          content: latex,
+        })
+      );
+    }
+    state.closePopup();
+    this.focusEditor();
+  }
+
+  private handleCancel(): void {
+    this.closePopup();
+    this.focusEditor();
+  }
+}

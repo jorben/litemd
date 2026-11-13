@@ -1,0 +1,54 @@
+/**
+ * Math Preview Popup Styles
+ * Compact floating preview for inline math editing
+ * Styled to match link popup design language
+ */
+
+/* Shell chrome comes from `.popup-container`. */
+.math-preview-popup {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-half);
+  padding: var(--space-1-5) var(--space-2-5);
+  max-width: 300px;
+  min-width: var(--space-15);
+}
+
+.math-preview-content {
+  font-size: var(--font-size-md);
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.math-preview-content.math-preview-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.math-preview-content.math-preview-empty::before {
+  content: "Empty";
+}
+
+.math-preview-content.math-preview-error-state {
+  color: var(--text-color);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.math-preview-error {
+  font-size: var(--font-size-xs);
+  color: var(--error-color);
+  min-height: var(--space-3);
+}
+
+.math-preview-error:empty {
+  display: none;
+}
+
+/* Dark theme */
+.dark-theme .math-preview-popup {
+  box-shadow: var(--popup-shadow-dark);
+}
+
