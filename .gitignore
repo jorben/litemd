@@ -1,0 +1,63 @@
+# ── OS / 编辑器 ─────────────────────────────────────────
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ── Go / mygo ───────────────────────────────────────────
+# mygo dev 与原生构建的中间产物
+/.mygo/
+# mygo build 的打包输出（.app、DMG、NSIS 安装包、AppImage、deb）
+/build/
+# Windows 资源文件（图标、清单），构建时生成
+mygo_windows_*.syso
+# 本地 go build 出来的可执行文件
+/litemd
+/litemd.exe
+# 测试与性能分析产物
+*.test
+*.out
+coverage.txt
+*.prof
+go.work
+go.work.sum
+
+# ── 前端（Vite + TypeScript + pnpm） ─────────────────────
+# frontend/pnpm-lock.yaml 需要提交，不要忽略
+node_modules/
+/frontend/dist/
+/frontend/coverage/
+/frontend/test-results/
+/frontend/playwright-report/
+*.tsbuildinfo
+.vite/
+.eslintcache
+.pnpm-store/
+.pnpm-debug.log*
+*.log
+
+# 生成的 TS 客户端 frontend/src/mygo.ts 需要提交（类型检查和 CI 依赖它），不要忽略
+
+# ── 本地环境与密钥 ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+# 自动更新签名私钥（mygo keygen）、代码签名证书：只放在密码管理器和 CI secrets
+*.key
+mygo-update.key
+*.p12
+*.pfx
+*.cer
+*.mobileprovision
+
+# ── 工具 ────────────────────────────────────────────────
+# pi 代理的本地任务状态
+/.pi/tasks/
+# 性能测量生成的大文件语料
+/tmp/
