@@ -15,6 +15,14 @@ export interface ContentInfo {
   seq: number;
 }
 
+/** FileState 是页面保存的按文件状态。 */
+export interface FileState {
+  mode?: string;
+  outline?: boolean;
+  /** 滚动比例 0–1 */
+  scroll?: number;
+}
+
 /** FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。 */
 export interface FlushRequest {
   n: number;
@@ -48,6 +56,81 @@ export interface ReadyInfo {
   eol: string;
   recovered: boolean;
   size: number;
+}
+
+/** Settings 是全部设置项。 */
+export interface Settings {
+  version: number;
+  /** 通用 */
+  defaultMode: string;
+  /** D2：默认开启；D11：重启后生效 */
+  autosave: boolean;
+  /** 按文件记住窗口大小和位置 */
+  restoreWindow: boolean;
+  /** system / zh-Hans / en */
+  language: string;
+  /** 编辑 */
+  imageRule: string;
+  /** custom 时的相对路径 */
+  imageCustom: string;
+  /** 粘贴时把富文本转换为 Markdown */
+  pasteRich: boolean;
+  /** F5.11：默认关闭 */
+  spellCheck: boolean;
+  /** 代码块 Tab 宽度 */
+  tabWidth: number;
+  /** 外观 */
+  theme: string;
+  /** 字号缩放（F9.2） */
+  fontScale: number;
+  /** narrow / medium / wide / full（F9.3） */
+  width: string;
+  bodyFont: string;
+  codeFont: string;
+  /** 隐私 */
+  networkImages: boolean;
+  /** F11.4 */
+  autoUpdate: boolean;
+  /** 界面 */
+  statusBar: boolean;
+}
+
+/** View 是页面看到的设置：外加自动保存在本次运行中是否生效。 */
+export interface View {
+  version: number;
+  /** 通用 */
+  defaultMode: string;
+  /** D2：默认开启；D11：重启后生效 */
+  autosave: boolean;
+  /** 按文件记住窗口大小和位置 */
+  restoreWindow: boolean;
+  /** system / zh-Hans / en */
+  language: string;
+  /** 编辑 */
+  imageRule: string;
+  /** custom 时的相对路径 */
+  imageCustom: string;
+  /** 粘贴时把富文本转换为 Markdown */
+  pasteRich: boolean;
+  /** F5.11：默认关闭 */
+  spellCheck: boolean;
+  /** 代码块 Tab 宽度 */
+  tabWidth: number;
+  /** 外观 */
+  theme: string;
+  /** 字号缩放（F9.2） */
+  fontScale: number;
+  /** narrow / medium / wide / full（F9.3） */
+  width: string;
+  bodyFont: string;
+  codeFont: string;
+  /** 隐私 */
+  networkImages: boolean;
+  /** F11.4 */
+  autoUpdate: boolean;
+  /** 界面 */
+  statusBar: boolean;
+  autosaveEffective: boolean;
 }
 
 // ---- Services ----
@@ -147,6 +230,30 @@ export const Shell = {
   },
 } as const;
 
+/** Service 是绑定给页面的 Settings 服务。 */
+export const Settings = {
+  /** Get 返回当前设置。 */
+  get(): Promise<View> {
+    return call("Settings.Get");
+  },
+  /** Set 保存设置，并广播给所有窗口。 */
+  set(s: Settings): Promise<View> {
+    return call("Settings.Set", s);
+  },
+} as const;
+
+/** Service 是绑定给页面的 FileState 服务。 */
+export const FileState = {
+  /** Get 返回调用者窗口文档的状态（未命名文档没有）。 */
+  get(): Promise<FileState> {
+    return call("FileState.Get");
+  },
+  /** Set 保存调用者窗口文档的状态。 */
+  set(fs: FileState): Promise<void> {
+    return call("FileState.Set", fs);
+  },
+} as const;
+
 // ---- Events ----
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
@@ -155,4 +262,6 @@ export const events = {
   command: event<CommandRequest>("command"),
   /** Flush 事件：页面收到后立即推送未同步的编辑，再调用 Session.flushed(n)。 */
   flush: event<FlushRequest>("flush"),
+  /** Changed 在设置改动后广播给所有窗口。 */
+  settingsChanged: event<View>("settings-changed"),
 } as const;

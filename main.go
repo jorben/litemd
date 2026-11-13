@@ -11,15 +11,23 @@ import (
 	"github.com/jorben/litemd/internal/assets"
 	"github.com/jorben/litemd/internal/cli"
 	"github.com/jorben/litemd/internal/doc"
+	"github.com/jorben/litemd/internal/filestate"
 	"github.com/jorben/litemd/internal/links"
 	"github.com/jorben/litemd/internal/menu"
 	"github.com/jorben/litemd/internal/session"
+	"github.com/jorben/litemd/internal/settings"
 	"github.com/jorben/litemd/internal/start"
 )
 
 func main() {
 	if !mygo.App.RequestSingleInstanceLock() { // F1.3
 		return
+	}
+	settings.Load() // 自动保存模式只能在 NewDocuments 时设定（D11）
+	filestate.Load(settings.Default.Get().RestoreWindow)
+	assets.CurrentRule = func() assets.Rule {
+		st := settings.Default.Get()
+		return assets.Rule{Kind: st.ImageRule, Custom: st.ImageCustom}
 	}
 	// 以下两项必须在 NewDocuments 之前注册：mygo 的退出处理和打开文件处理在 NewDocuments 里注册，
 	// 收齐和启动窗口的计数要排在它们前面（技术方案 3.1、5.3 节）。
@@ -38,8 +46,9 @@ func main() {
 		Write:         doc.Write,
 		Equal:         doc.Equal,
 		Window:        newDocWindow,
-		AutosaveDelay: time.Second, // F2.2：约 1 秒
-		NoUntitled:    true,        // F1.9 / D7：不自动新建，显示启动窗口
+		Autosave:      settings.AutosaveMode(), // D2 默认开启
+		AutosaveDelay: time.Second,             // F2.2：约 1 秒
+		NoUntitled:    true,                    // F1.9 / D7：不自动新建，显示启动窗口
 	})
 	cli.Install(func(p string) error { _, err := docs.Open(p); return err }, start.Expect) // F1.5
 	start.Install(docs)                                                                    // F1.12
@@ -50,6 +59,8 @@ func main() {
 	mygo.BindAs("Assets", assets.Service{})
 	mygo.BindAs("Links", links.Service{})
 	mygo.BindAs("Shell", links.ShellService{})
+	mygo.BindAs("Settings", settings.Service{})
+	mygo.BindAs("FileState", filestate.Service{})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -65,7 +76,8 @@ func newDocWindow(d *session.Document) *mygo.Window {
 		Height:          1000,
 		MinWidth:        420,
 		MinHeight:       320,
-		BackgroundColor: "light-dark(#ffffff, #1e1e1e)", // 避免白屏闪烁
+		BackgroundColor: "light-dark(#ffffff, #1e1e1e)",      // 避免白屏闪烁
+		StateKey:        filestate.WindowKey(d.State().Path), // 按文件记住窗口（未命名为空）；有记录时覆盖层叠位置
 	}
 	if f := focusedDocWindow(); f != nil { // F1.8：相对当前窗口向右下层叠
 		x, y := f.Position()

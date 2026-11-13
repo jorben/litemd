@@ -133,3 +133,29 @@ func TestBase(t *testing.T) {
 		t.Fatal(b)
 	}
 }
+
+// 拖入路径必须是本窗口最近一次拖放登记过的，过期失效（第 7 节）。
+func TestDropRegistry(t *testing.T) {
+	w1, w2 := "w1", "w2"
+	clock := time.Unix(1000, 0)
+	now = func() time.Time { return clock }
+	defer func() { now = time.Now }()
+	recordDrop(w1, []string{"/x/a.png", "/x/b.pdf"})
+	if !wasDropped(w1, "/x/a.png") || !wasDropped(w1, "/x/./b.pdf") {
+		t.Fatal("登记过的路径应被接受")
+	}
+	if wasDropped(w2, "/x/a.png") {
+		t.Fatal("其他窗口的拖放不能用")
+	}
+	if wasDropped(w1, "/etc/passwd") {
+		t.Fatal("未拖入的路径不能用")
+	}
+	recordDrop(w1, []string{"/x/c.png"})
+	if wasDropped(w1, "/x/a.png") {
+		t.Fatal("只认最近一次拖放")
+	}
+	clock = clock.Add(DropTTL + time.Second)
+	if wasDropped(w1, "/x/c.png") {
+		t.Fatal("过期后失效")
+	}
+}

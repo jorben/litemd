@@ -200,7 +200,8 @@ type dropSet struct {
 
 var (
 	dropMu sync.Mutex
-	drops  = map[*mygo.Window]*dropSet{}
+	drops  = map[any]*dropSet{}
+	now    = time.Now
 )
 
 // DropTTL 是拖放登记的有效期。
@@ -212,8 +213,8 @@ func TrackDrops(w *mygo.Window) {
 	w.OnClosed(func() { dropMu.Lock(); delete(drops, w); dropMu.Unlock() })
 }
 
-func recordDrop(w *mygo.Window, paths []string) {
-	set := &dropSet{paths: map[string]bool{}, at: time.Now()}
+func recordDrop(w any, paths []string) {
+	set := &dropSet{paths: map[string]bool{}, at: now()}
 	for _, p := range paths {
 		set.paths[filepath.Clean(p)] = true
 	}
@@ -222,11 +223,11 @@ func recordDrop(w *mygo.Window, paths []string) {
 	dropMu.Unlock()
 }
 
-func wasDropped(w *mygo.Window, p string) bool {
+func wasDropped(w any, p string) bool {
 	dropMu.Lock()
 	defer dropMu.Unlock()
 	s := drops[w]
-	return s != nil && time.Since(s.at) < DropTTL && s.paths[filepath.Clean(p)]
+	return s != nil && now().Sub(s.at) < DropTTL && s.paths[filepath.Clean(p)]
 }
 
 // ---- 图片落盘 ----
