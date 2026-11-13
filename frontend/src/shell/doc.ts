@@ -86,6 +86,9 @@ export async function docPage(app: HTMLElement): Promise<void> {
   let state: DocumentState | null = initialState as DocumentState | null;
   const banners: Banner[] = [];
   // 计时器与界面状态：编辑器创建时就可能触发回调（载入事务、大纲刷新），必须先于编辑器声明
+  // 浮动格式栏状态：编辑器构造时的首个事务就会调度它，必须在编辑器之前声明
+  let toolbar: HTMLElement | null = null;
+  let toolbarRaf = 0;
   let splitTimer = 0;
   let scrollLock = false;
   let statusTimer = 0;
@@ -128,7 +131,10 @@ export async function docPage(app: HTMLElement): Promise<void> {
     text,
     editable: mode === "wysiwyg",
     onUserEdit: () => sync.edit(),
-    onTransaction: () => scheduleOutline(),
+    onTransaction: () => {
+      scheduleOutline();
+      scheduleToolbar();
+    },
   });
   let source: SourceEditor | null = null;
   let sourceEntry = "";
@@ -708,6 +714,71 @@ export async function docPage(app: HTMLElement): Promise<void> {
       showTextInput: from === to,
     });
   }
+  // ---- 浮动格式栏（F5.3）：所见即所得中选中文字时出现 ----
+  function scheduleToolbar(): void {
+    cancelAnimationFrame(toolbarRaf);
+    toolbarRaf = requestAnimationFrame(renderToolbar);
+  }
+  function renderToolbar(): void {
+    const v = rich.editor.view;
+    const sel = v.state.selection;
+    const show = mode === "wysiwyg" && v.hasFocus() && !sel.empty && sel.$from.parent.inlineContent && sel.$from.parent.type.name !== "codeBlock";
+    if (!show) {
+      toolbar?.remove();
+      toolbar = null;
+      return;
+    }
+    if (!toolbar) {
+      toolbar = document.createElement("div");
+      toolbar.className = "lm-fmtbar";
+      toolbar.setAttribute("role", "toolbar");
+      toolbar.setAttribute("aria-label", t("格式"));
+      const items: Array<[string, string, string]> = [
+        ["bold", "<b>B</b>", t("加粗")], ["italic", "<i>I</i>", t("斜体")], ["strike", "<s>S</s>", t("删除线")],
+        ["inline-code", "&lt;/&gt;", t("行内代码")], ["link", "🔗", t("链接")],
+        ["heading-1", "H1", t("标题 1")], ["heading-2", "H2", t("标题 2")], ["heading-3", "H3", t("标题 3")], ["paragraph", "¶", t("正文")],
+      ];
+      toolbar.innerHTML = items.map(([id, label, title]) => `<button data-cmd="${id}" title="${title}" aria-label="${title}">${label}</button>`).join("");
+      toolbar.addEventListener("mousedown", (e) => e.preventDefault()); // 保持选区
+      toolbar.addEventListener("click", (e) => {
+        const id = (e.target as HTMLElement).closest<HTMLElement>("[data-cmd]")?.dataset.cmd;
+        if (id) runCommand(id);
+      });
+      document.body.appendChild(toolbar);
+    }
+    const a = v.coordsAtPos(sel.from);
+    const b = v.coordsAtPos(sel.to);
+    const w = toolbar.offsetWidth || 300;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, (a.left + b.right) / 2 - w / 2));
+    const top = a.top > 60 ? a.top - 42 : b.bottom + 8;
+    toolbar.style.left = `${left}px`;
+    toolbar.style.top = `${top}px`;
+    toolbar.querySelectorAll<HTMLButtonElement>("[data-cmd]").forEach((btn) => {
+      const id = btn.dataset.cmd!;
+      const mark = { bold: "bold", italic: "italic", strike: "strike", "inline-code": "code", link: "link" }[id];
+      const on = mark ? rich.editor.isActive(mark) : id.startsWith("heading-") ? rich.editor.isActive("heading", { level: Number(id.slice(8)) }) : false;
+      btn.setAttribute("aria-pressed", String(on));
+    });
+  }
+  richScroll.addEventListener("scroll", () => toolbar && renderToolbar(), { passive: true });
+  rich.editor.on("blur", () => setTimeout(renderToolbar, 0));
+
+  // ---- 网络图片（F6.2）：关闭加载时，点击单张图片由 Go 下载后显示 ----
+  richScroll.addEventListener("click", async (e) => {
+    const img = (e.target as HTMLElement).closest("img");
+    if (!img || getSettings().networkImages) return;
+    const src = img.getAttribute("src") ?? "";
+    if (!/^https?:/i.test(src) || img.dataset.lmLoaded) return;
+    e.preventDefault();
+    try {
+      const blob = await host.fetchImage(src);
+      img.dataset.lmLoaded = "1";
+      img.src = URL.createObjectURL(blob);
+    } catch (err) {
+      showBanner({ key: "netimg", kind: "warn", title: t("这张网络图片没有加载"), detail: String(err), actions: [], closable: true });
+    }
+  });
+
   // ---- 导出与打印（F8） ----
   function exportOptions(kind: "html" | "pdf"): Promise<{ embed: boolean; paper: string } | null> {
     return new Promise((resolve) => {
