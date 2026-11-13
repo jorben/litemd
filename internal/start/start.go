@@ -31,6 +31,10 @@ var (
 	mu      sync.Mutex
 	win     *mygo.Window
 	readyAt time.Time
+	// OnFocus 由 main 注入：启动窗口获得焦点时刷新菜单（保存类命令置灰）。
+	OnFocus = func() {}
+	// Harden 由 main 注入（links.Harden），避免 start 依赖 links
+	Harden func(*mygo.Window)
 	// Shown 记录启动窗口出现的次数，供自动化测试和 M0 报告读取。
 	Shown atomic.Int32
 )
@@ -112,6 +116,10 @@ func Show() {
 			}
 		}
 	})
+	if Harden != nil {
+		Harden(w)
+	}
+	w.OnFocus(func() { OnFocus() })
 	w.OnClosed(func() {
 		mu.Lock()
 		if win == w {

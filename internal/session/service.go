@@ -2,10 +2,10 @@ package session
 
 import (
 	"context"
-	"log"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -39,6 +39,8 @@ type entry struct {
 	sync      *Sync
 	token     string
 	recovered bool
+	stateMu   sync.Mutex
+	pageState any         // 页面通过 setMenuState 报告的状态（menu.PageState），菜单据此置灰
 	closeOK   atomic.Bool // 已收齐，下一次关窗放行给 mygo
 }
 
@@ -79,7 +81,10 @@ func Attach(w *mygo.Window, d *Document, recovered bool) {
 		mu.Lock()
 		delete(byWindow, w)
 		mu.Unlock()
+		OnMenuState()
 	})
+	w.OnFocus(func() { OnMenuState() })
+	d.OnStateChange(func(mygo.DocumentState) { OnMenuState() })
 	d.OnReload(func() { e.sync.Reset(e.sync.Seq()) })
 	// markDirty 的 SetEdited(true) 会启动自动保存计时；若页面推送晚于计时，自动保存写的是上一版内容并把
 	// 文档标回「未编辑」。此时页面仍有未推送的编辑：重新标记已编辑，并立即请求收齐（M0 报告 V2）。
@@ -104,6 +109,28 @@ func entryFor(w *mygo.Window) *entry {
 	defer mu.Unlock()
 	return byWindow[w]
 }
+
+// ForWindow 返回窗口对应的文档（不是文档窗口时为 nil）。
+func ForWindow(w *mygo.Window) *Document {
+	if e := entryFor(w); e != nil {
+		return e.doc
+	}
+	return nil
+}
+
+// PageStateOf 返回窗口最近一次报告的页面状态。
+func PageStateOf(w *mygo.Window) (any, bool) {
+	e := entryFor(w)
+	if e == nil {
+		return nil, false
+	}
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	return e.pageState, e.pageState != nil
+}
+
+// OnMenuState 由 main 注入：页面状态变化后刷新菜单（在主线程调用）。
+var OnMenuState = func() {}
 
 // DocForToken 返回令牌所属窗口的文档（lmasset 协议用）。
 func DocForToken(token string) (*Document, *mygo.Window) {
@@ -291,4 +318,63 @@ func (s Service) Save(ctx context.Context) error {
 		return err
 	}
 	return e.doc.Save()
+}
+
+// MenuState 是页面报告的当前模式与可编辑状态（与 menu.PageState 字段一致）。
+type MenuState struct {
+	Mode      string `json:"mode"`
+	Editable  bool   `json:"editable"`
+	Lossy     bool   `json:"lossy"`
+	Outline   bool   `json:"outline"`
+	Statusbar bool   `json:"statusbar"`
+}
+
+// SetMenuState：页面报告当前模式，Go 据此置灰菜单（技术方案 3.4 节）。
+func (s Service) SetMenuState(ctx context.Context, st MenuState) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	e.stateMu.Lock()
+	e.pageState = st
+	e.stateMu.Unlock()
+	mygo.App.WhenReady(OnMenuState) // WhenReady 在应用已就绪时于主线程执行
+	return nil
+}
+
+// SaveAsUTF8：非 UTF-8 文档另存为 UTF-8（技术方案 3.2 节，D14）。不走 mygo 的 SaveAs：
+// 那会经过拒绝写回的 Write，也会把当前文档改指向新路径。
+func (s Service) SaveAsUTF8(ctx context.Context) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	return SaveAsUTF8(mygo.CallerWindow(ctx), e.doc)
+}
+
+// OpenPath 由 main 注入：打开一个文件（docs.Open）。
+var OpenPath = func(string) error { return nil }
+
+// SaveAsUTF8 弹保存对话框，把文档内容以 UTF-8 写到目标路径，关闭当前窗口并打开新文件。
+func SaveAsUTF8(w *mygo.Window, d *Document) error {
+	st, c := d.State(), d.Content()
+	def := doc.UTF8Name(st.Path)
+	if st.Path == "" {
+		def = st.Name + ".md"
+	}
+	target, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: w, Title: "另存为 UTF-8", DefaultPath: def,
+		Filters: []mygo.FileFilter{{Name: "Markdown", Extensions: []string{"md", "markdown", "mdown", "mkd", "txt"}}}})
+	if err != nil {
+		if errors.Is(err, mygo.ErrCanceled) {
+			return nil
+		}
+		return err
+	}
+	if err := doc.WriteFileAtomic(target, c.UTF8Copy().Encode()); err != nil {
+		return err
+	}
+	// 选了原路径时也先关窗再打开，避免 Open 只聚焦旧窗口
+	d.SetEdited(false)
+	d.Close()
+	return OpenPath(target)
 }

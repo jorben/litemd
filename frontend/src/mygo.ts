@@ -4,6 +4,11 @@ import { call, event } from "mygo-runtime";
 
 // ---- Types ----
 
+/** CommandRequest 是发给页面的菜单命令。 */
+export interface CommandRequest {
+  id: string;
+}
+
 /** ContentInfo 是正文与当前序号。 */
 export interface ContentInfo {
   text: string;
@@ -13,6 +18,21 @@ export interface ContentInfo {
 /** FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。 */
 export interface FlushRequest {
   n: number;
+}
+
+/** Image 是 fetchImage 的结果（[]byte 在 TS 中为 base64 字符串）。 */
+export interface Image {
+  data: string;
+  mime: string;
+}
+
+/** MenuState 是页面报告的当前模式与可编辑状态（与 menu.PageState 字段一致）。 */
+export interface MenuState {
+  mode: string;
+  editable: boolean;
+  lossy: boolean;
+  outline: boolean;
+  statusbar: boolean;
 }
 
 /** ReadyInfo 是页面启动时拿到的上下文（技术方案 3.4 节）。 */
@@ -62,9 +82,20 @@ export const Session = {
   saveAnyway(): Promise<void> {
     return call("Session.SaveAnyway");
   },
+  /**
+   * SaveAsUTF8：非 UTF-8 文档另存为 UTF-8（技术方案 3.2 节，D14）。不走 mygo 的 SaveAs：
+   * 那会经过拒绝写回的 Write，也会把当前文档改指向新路径。
+   */
+  saveAsUTF8(): Promise<void> {
+    return call("Session.SaveAsUTF8");
+  },
   /** SetContent 带序号推送正文，过期的推送被丢弃。返回是否应用。 */
   setContent(seq: number, text: string): Promise<boolean> {
     return call("Session.SetContent", seq, text);
+  },
+  /** SetMenuState：页面报告当前模式，Go 据此置灰菜单（技术方案 3.4 节）。 */
+  setMenuState(st: MenuState): Promise<void> {
+    return call("Session.SetMenuState", st);
   },
 } as const;
 
@@ -80,10 +111,48 @@ export const Start = {
   },
 } as const;
 
+/** Service 是绑定给文档页面的 Assets 服务。 */
+export const Assets = {
+  /** FetchImage：单张网络图片。 */
+  fetchImage(rawURL: string): Promise<Image> {
+    return call("Assets.FetchImage", rawURL);
+  },
+  /** ImportDropped：拖入正文的文件。图片复制到图片目录，其他文件只计算相对路径（F6.3/F6.5）。 */
+  importDropped(paths: string[]): Promise<string[]> {
+    return call("Assets.ImportDropped", paths);
+  },
+  /** SaveImage：粘贴的图片落盘，返回相对路径（F6.3/F6.4）。 */
+  saveImage(data: string): Promise<string> {
+    return call("Assets.SaveImage", data);
+  },
+} as const;
+
+/** Service 是绑定给文档页面的 Links 服务。 */
+export const Links = {
+  /** Open 打开文档中的链接（用户点击或 ⌘ 点击时由页面调用）。 */
+  open(href: string): Promise<void> {
+    return call("Links.Open", href);
+  },
+} as const;
+
+/** ShellService 提供在访达中显示、拷贝路径（F6.6）。 */
+export const Shell = {
+  /** CopyPath 拷贝文档的完整路径。 */
+  copyPath(): Promise<void> {
+    return call("Shell.CopyPath");
+  },
+  /** RevealInFolder 在访达 / 资源管理器中显示文档本身，或文档引用的文件（ref 为空时为文档）。 */
+  revealInFolder(ref: string): Promise<void> {
+    return call("Shell.RevealInFolder", ref);
+  },
+} as const;
+
 // ---- Events ----
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
+  /** Command 事件：页面的命令注册表按 ID 执行（技术方案 3.6 节）。 */
+  command: event<CommandRequest>("command"),
   /** Flush 事件：页面收到后立即推送未同步的编辑，再调用 Session.flushed(n)。 */
   flush: event<FlushRequest>("flush"),
 } as const;

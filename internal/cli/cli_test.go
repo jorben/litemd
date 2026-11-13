@@ -15,11 +15,11 @@ func TestPlan(t *testing.T) {
 	}
 	got := Plan([]string{"-v", "a.md", "new.md", "b.txt", "new.txt", "dir", "c.pdf", "x.pdf", "notes", "todo", "/abs/z.markdown", "file:///w/a.md", ""}, "/w", exists)
 	want := []Action{
-		{Path: "/w/new.md", Create: true},     // 不存在的 .md：创建
-		{Path: "/w/b.txt"},                    // 已存在的 .txt：mygo 不投递，这里打开
-		{Path: "/w/new.txt", Create: true},    // 不存在的 .txt：创建
-		{Path: "/w/notes.md"},                 // 无扩展名，补 .md 后已存在
-		{Path: "/w/todo.md", Create: true},    // 无扩展名，补 .md 后创建
+		{Path: "/w/new.md", Create: true},  // 不存在的 .md：创建
+		{Path: "/w/b.txt"},                 // 已存在的 .txt：mygo 不投递，这里打开
+		{Path: "/w/new.txt", Create: true}, // 不存在的 .txt：创建
+		{Path: "/w/notes.md"},              // 无扩展名，补 .md 后已存在
+		{Path: "/w/todo.md", Create: true}, // 无扩展名，补 .md 后创建
 		{Path: "/abs/z.markdown", Create: true},
 	}
 	if !reflect.DeepEqual(got, want) {
