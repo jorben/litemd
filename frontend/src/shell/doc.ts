@@ -11,6 +11,7 @@ import { PageSync } from "../sync/pageSync";
 import { host, onHostCommand, realHost, toBase64 } from "../host";
 import { getSettings, setSettings, type PageSettings } from "../settings/store";
 import { useLinkCreatePopupStore } from "@/stores/linkCreatePopupStore";
+import { bindHostSettings } from "@/plugins/shared/hostSettings";
 import { MATH_BLOCK_LANGUAGE } from "@/utils/markdownPipeline/mdastBlockConverters";
 import { applyAppearance, stepFont, watchSystemTheme } from "./theme";
 import { bindFindToVmark, findState, onFind, replaceAllInWysiwyg, replaceCurrentInWysiwyg, setFind, stepFind } from "./find";
@@ -67,6 +68,12 @@ export async function docPage(app: HTMLElement): Promise<void> {
   watchSystemTheme(getSettings);
   applyNetworkImagePolicy(getSettings());
   bindFindToVmark();
+  // 原始 HTML 用 DOMPurify extended 白名单（含 kbd、mark 等 README 常用标签），不允许内联样式（NF5）
+  bindHostSettings({
+    tabSize: () => getSettings().tabWidth,
+    pasteMode: () => (getSettings().pasteRich ? "smart" : "plain"),
+    htmlRendering: () => ({ mode: "sanitized", allowlistLevel: "extended", customTags: "" }),
+  });
 
   const readOnly = info.readOnly || info.lossy;
   const huge = info.size > HUGE;

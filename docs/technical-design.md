@@ -739,3 +739,17 @@ CI：PR 上跑 Go 测试、前端类型检查、lint、单元测试和保真回�
 | 预览与所见即所得“共用实例”与“不装编辑扩展”矛盾；跨模式撤销 | 第 8.2 节、PRD D15 |
 | API 名称（`Resizable`、`Center`）、遗漏的 `setMenuState`、D7、过时的 `•` 注释 | 第 3.3.1、3.4 节；文首 |
 | 前端包管理用 Bun，与 vmark 的 pnpm 补丁格式不一致 | 第 1.1、1.2 节（v0.2.1）：改用 pnpm |
+
+## 附录 B：实现中的偏离（M0–M1，2026-11-14）
+
+| 设计 | 实际做法 | 原因 |
+|---|---|---|
+| 1.1 节：外壳用 React 19 | 外壳（状态栏、提示条、查找条、大纲、启动窗口）用原生 TypeScript + DOM（`frontend/src/shell/`）；React 只作为 vmark 弹层 store（zustand）的依赖存在 | 外壳界面元素少，迁入的 vmark 插件都是 ProseMirror 插件与原生 DOM 弹层，不依赖 React 组件；省去一层渲染框架，首屏更轻（NF1） |
+| 4.2 节：迁入 vmark 模块 | 编辑器扩展按依赖闭包迁入（`frontend/src/vmark/`），在 7 处断点放 LiteMd 替代模块（i18n、链接打开、媒体地址、终端、工作流检测、graphviz、markmap），`@tauri-apps/*` 用构建别名指向 `frontend/src/host/tauri/` | vmark 的 NodeView 会把工作区、终端、store 一起带进来（未截断时 365 个文件），违背 4.1 节第 1 条 |
+| 4.4 节：StarterKit 的 code 标记 | `Code.extend({ excludes: "" })`，行内代码可与加粗、链接共存 | Tiptap 默认 `excludes: "_"`，撤销「取消加粗」时加不回 bold，破坏「撤销逐字节回到原文」（D3，M1 回归发现） |
+| 6.2 节：基线 doc 即编辑器文档 | 基线用编辑器自己的 schema 解析；载入后插件规范化了块（prosemirror-tables 补齐缺单元格的行）而顶层块数不变时，以载入后的文档为基线；Tiptap TrailingNode 补的末尾空段落在序列化前去掉 | 不同 schema 实例的节点不相等；载入不算编辑（264 份语料载入后序列化逐字节相同） |
+| 7 节：CSP 写在 index.html | 由 Vite 插件只在生产构建时注入（`frontend/csp.ts`）；开发服务器不注入 | HMR 需要 websocket 与内联模块 |
+| 7 节：DOMPurify 白名单 | 原始 HTML 用 vmark `sanitizeHtmlPreview` 的 extended 白名单（含 kbd、mark 等），不允许内联样式 | README 常见 `<kbd>`；extended 同样剔除脚本、事件属性、危险协议（`src/security.test.ts`） |
+| 3.6 节：菜单可用状态 | 没有聚焦窗口时不刷新菜单 | 从命令行启动、应用未激活时 `FocusedWindow()` 为 nil，会把文档类菜单项全部置灰（M1 实测发现） |
+| 5.2 节：脏标记 | `markDirty` 之后若 mygo 自动保存把文档标回未编辑而页面仍有未推送编辑，重新标记并立即收齐 | M0 V2 发现的竞态 |
+| 3.4 节：Session 服务 | 增加 `state`、`saveAs`、`duplicate`；新增 `Export.choosePath/writeChosen`（只能写对话框选择的路径）、`Shell.readClipboardText` | 页面启动取文档状态；vmark 图表导出、粘贴为 Markdown 需要 |

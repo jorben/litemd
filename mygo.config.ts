@@ -19,7 +19,12 @@ const config: Config = {
   fileAssociations: [
     { ext: ["md", "markdown", "mdown", "mkd"], name: "Markdown Document", mimeType: "text/markdown" },
   ],
-  macos: { minimumSystemVersion: "13.0" },
+  macos: {
+    minimumSystemVersion: "13.0", // 技术方案 3.9 节
+    // 本机构建为 ad-hoc 签名；发布工作流从 secrets 导入 Developer ID 证书并设置这两个环境变量（F11.1）
+    signingIdentity: process.env.MACOS_SIGNING_IDENTITY || "-",
+    ...(process.env.NOTARY_KEYCHAIN ? { notarize: { keychainProfile: "notary", keychain: process.env.NOTARY_KEYCHAIN } } : {}),
+  },
 };
 
 export default config;

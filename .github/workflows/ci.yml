@@ -1,0 +1,89 @@
+# PR 与 master：三个平台上跑 Go 测试、前端类型检查 / lint / 单元测试与保真回归，并构建安装包（技术方案第 9 节）。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm -C frontend install --frozen-lockfile
+      - name: Go vet
+        run: go vet ./...
+      - name: gofmt
+        if: runner.os != 'Windows'
+        run: test -z "$(gofmt -l main.go internal)"
+      - name: Go test
+        run: go test -race ./...
+      - name: TypeScript client is up to date
+        if: runner.os == 'Linux'
+        run: |
+          go tool mygo generate
+          git diff --exit-code frontend/src/mygo.ts
+      - name: Typecheck
+        run: pnpm -C frontend typecheck
+      - name: Lint
+        run: pnpm -C frontend lint
+      - name: Unit tests and fidelity regression
+        run: pnpm -C frontend test
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, platform: "darwin/arm64" }
+          - { name: Windows, os: windows-latest, platform: "windows/amd64" }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm -C frontend install --frozen-lockfile
+      - name: Build (unsigned)
+        run: go tool mygo build -platform "${{ matrix.platform }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: litemd-${{ matrix.name }}
+          path: build/
+          retention-days: 7

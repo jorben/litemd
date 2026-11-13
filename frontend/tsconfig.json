@@ -53,7 +53,8 @@
     "test",
     "vitest.config.ts",
     "vite.config.ts",
-    "aliases.ts"
+    "aliases.ts",
+    "csp.ts"
   ],
   "exclude": [
     "src/vmark/**/*.test.ts",
