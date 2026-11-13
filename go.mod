@@ -2,7 +2,10 @@ module github.com/jorben/litemd
 
 go 1.27.4
 
-require github.com/egoist/mygo v0.9.1-0.20261112203958-6eaa7fb47e01
+require (
+	github.com/egoist/mygo v0.9.1-0.20261112203958-6eaa7fb47e01
+	golang.org/x/text v0.43.0
+)
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
@@ -14,7 +17,6 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 )
 
 tool github.com/egoist/mygo/cmd/mygo

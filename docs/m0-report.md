@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | 进行中 |
+| 状态 | 完成（V5 与 Windows 项待手工 / CI 验证） |
 | 日期 | 2026-11-14 |
 | 依据 | `docs/technical-design.md` v0.2 第 10 节（V1–V8） |
 | 基线 | mygo `6eaa7fb`（Go 模块 `v0.9.1-0.20261112203958-6eaa7fb47e01`，npm 包 `mygo-runtime`/`mygo-cli` 0.9.0）；vmark `01bf9f4`（0.9.120） |
@@ -96,3 +96,84 @@ characterization golden 中 12/15/16/17 号随 D13 更新，逐条核对过差�
 判定过程中的一个发现：vmark 管线对 5 份语料的规范往返**本身就会改变语义**（行内 HTML 段落被读成 HTML 块、长段落合并行）。保真写回因保留原文反而更正确；测试的语义判定因此以编辑后的文档本身为准。
 
 退路：不需要（③ ≥ 98%）。M1 待办：基线提交（`commitBaseline`）目前按新文本重新解析建立单元，再换回当前文档节点，需要改为直接平移单元区间，以免节点身份丢失；`docFingerprint` 目前从 vmark 的测试目录引用，迁到非测试位置。
+
+## V1/V2/V5–V8 的实测方法
+
+在 macOS 上用 `GOFLAGS=-tags=e2e go tool mygo build -debug` 构建带 mygo 自动化插件的 .app（`automation_e2e.go`，发布构建不含），用 `mygo-automation` 驱动：列窗口、在页面里 `eval` 模拟用户输入（带 CodeMirror `input.type` 用户事件注解）、选菜单、截图；外部修改、崩溃（`kill -9`）、第二实例、点 Dock（`open LiteMd.app`）由 shell 产生。设置 `LITEMD_DEBUG=1` 时 Go 侧把收齐过程写入日志。M0 验证页（`frontend/src/main.ts`）是 CodeMirror 源码编辑 + 同步协议 + 一个 Tiptap 输入法区域，M1 替换为正式外壳。
+
+## V1 mygo 文档窗口与工具链 —— 通过（macOS）；Windows 待 CI
+
+| 检查 | 结果 |
+|---|---|
+| 工具链 | 见第 0 节：`go tool mygo`、Node 执行 `mygo.config.ts`、`mygo generate` 输出到 `frontend/src/mygo.ts` 均通过。两个服务类型同名 `Service` 时 `mygo.Bind` 会 panic，改用 `BindAs("Session")` / `BindAs("Start")` |
+| 一个文件一个窗口、单实例 | 应用运行时再执行 `LiteMd a.md`：第二实例退出码 0，文件在现有进程开新窗口 |
+| 只打开不写盘 | 打开 CRLF 文件后 `cmp` 与原文件相同 |
+| 自动保存 | 输入后约 1 s 写盘，CRLF 保留（`od -c` 核对），状态回到未编辑 |
+| 恢复副本 | 未命名文档输入后 `kill -9`，重启时自动恢复，`recovered=true`，内容一致 |
+| 新窗口层叠（F1.8） | 连续打开 6 个文件，窗口位置依次偏移 24 pt（System Events 读取：1064,173 → 1184,293） |
+| Finder 双击打开 | 文件关联已在 `mygo.config.ts` 配置；双击走与命令行相同的 `OnOpenFile`，未单独自动化，冒烟清单手工确认 |
+| Windows | 待 CI（GitHub Actions windows runner 构建与 `go test`），交互项待手工验证 |
+
+## V2 同步协议 —— 通过（发现并修复 1 个问题）
+
+| 场景 | 结果 |
+|---|---|
+| 输入后、防抖到期前关窗（推送延迟改为 60 s 制造未推送状态） | `OnClose` 拦截 → `flush` 事件 → 页面推送 → `flushed` → 关窗，内容写盘 |
+| 输入后立即退出 | `OnBeforeQuit` 拦截收齐后再次 `Quit`，进程退出，内容写盘，无重复询问 |
+| 本地无改动时外部修改 | 静默重新载入（F2.4） |
+| 本地有未推送输入时外部修改 | 进入冲突，显示提示条，输入未被冲掉；选「保留我的版本」后磁盘为本地内容 |
+| 乱序推送、并发、收齐超时 | Go 单元测试（`internal/session`，含 `-race`）与页面单元测试（`frontend/src/sync`）覆盖 |
+
+**发现的问题**：`markDirty` 调用 `SetEdited(true)` 会启动 mygo 的自动保存计时；若页面的推送晚于计时（实测把推送延迟设大即可复现），自动保存写的是上一版内容并把文档标回「未编辑」，此后关窗不再收齐，最后的输入会丢。**修复**：`session.Attach` 监听 `OnStateChange`，文档变为未编辑而页面仍有未推送编辑时，重新 `SetEdited(true)` 并立即收齐。修复后上述场景通过。正常防抖（150/400 ms）远短于自动保存延迟（1 s），这是边界情况，但必须兜住。
+
+## V5 输入法与快捷键 —— 待手工验证
+
+自动化插件不能驱动输入法组字（页面窗口只能 `eval`），macOS 拼音、Windows 微软拼音、搜狗在 Tiptap 与 CodeMirror 中的组字、候选框位置、组字中不触发快捷键，需要在冒烟阶段手工验证（PRD 第 7 节第 5 条）。代码侧已有的保护：CodeMirror 与 vmark `compositionGuard` 在组字期间不处理按键；原型的全局快捷键处理在 `isComposing` / `keyCode 229` 时跳过。菜单加速键与编辑器键位的重复触发，在 M1 自建菜单后一并验证。
+
+## V6 性能 —— 接近或达到 NF1–NF4（M0 验证页）
+
+测量脚本：`scripts/perf.py`（需先用 e2e 标签构建到 /tmp/litemd-e2e）。测试机 Apple Silicon，e2e 调试构建，文档为语料拼接的 100 KB / 1 MB Markdown，计时终点为页面内容渲染完成（`performance.timeOrigin + now()`）。
+
+| 指标 | 目标 | 结果 |
+|---|---|---|
+| 冷启动到显示内容（100 KB） | < 1 s | 370 / 375 / 721 ms（中位 375 ms） |
+| 已运行时打开新文件（含第二实例进程启动与转发） | < 400 ms | 107–141 ms |
+| 6 个窗口的内存（应用进程 + WebKit 进程合计） | 单窗口 < 150 MB | 677 MB，约 113 MB / 窗口 |
+| 1 MB 文档打开 | — | 116 ms |
+| 1 MB 文档输入（CodeMirror 事务） | P95 < 16 ms | P50 1 ms、P95 2 ms、最大 5 ms |
+| 1 MB 文档一次推送 | — | 7 ms |
+| 安装包 | DMG < 25 MB | .app 11 MB（调试构建），DMG 2.5 MB（骨架）；M1 加入完整前端后复测 |
+
+注意：这是**源码模式**的数据。预览 / 所见即所得（Tiptap + 保真写回）在 M1 完成后用同一脚本复测，写入 `docs/perf-report.md`；1 MB 文档窗口的 WebKit 内存约增加 300 MB，大文档默认源码模式（NF2）的阈值届时一并复核。
+
+## V7 启动窗口 —— 通过（macOS）
+
+| 场景 | 结果 |
+|---|---|
+| 不带文件启动 | 只出现启动窗口（`#/start`） |
+| 带文件启动 | 第一个窗口就是文档窗口（窗口 ID 1），启动窗口未出现 |
+| 恢复副本启动 | 第一个窗口就是恢复的文档，启动窗口未出现（300 ms 等待足够） |
+| 启动窗口点「新建」 | 出现未命名文档窗口，启动窗口自动关闭 |
+| 关闭最后一个文档窗口（macOS） | 应用留在 Dock，不弹窗 |
+| 无窗口时点 Dock | 显示启动窗口；再点一次仍只有一个 |
+| 关闭启动窗口（macOS） | 应用留在 Dock |
+| 打开对话框里取消、拖入文件到启动窗口 | 系统面板与原生拖放无法自动化，待手工验证 |
+| Windows / Linux 关闭最后一个窗口时退出 | 待 CI / 手工验证 |
+
+## V8 编码与命令行 —— 通过
+
+| 场景 | 结果 |
+|---|---|
+| `litemd new-cli.md`（不存在） | 创建空文件并打开 |
+| `litemd todo`（无扩展名、不存在） | 补 `.md`，创建并打开 |
+| `litemd note.txt` | 打开（mygo 不投递 .txt，由 `internal/cli` 处理） |
+| GB18030 文件 | 按 GB18030 显示，只读，原文件字节未变 |
+| UTF-16 LE（带 BOM） | 正确显示，只读 |
+| 「另存为 UTF-8」 | Go 侧 `UTF8Copy` / `WriteFileAtomic` 单元测试通过；菜单与提示条接线在 M1 |
+| 命令行参数解析 | `internal/cli` 单元测试覆盖（选项、目录、其他扩展名、已存在/不存在） |
+
+## M0 结论
+
+- V1、V2、V3、V4、V6、V7、V8 在 macOS 上通过；V5 待手工验证；Windows 相关项待 CI 与手工验证。
+- 不需要启用技术方案第 10 节的任何退路。保真写回原型达到 99.62%（≥ 98%）。
+- 带入 M1 的待办：V2 的状态兜底已并入 `internal/session`；`commitBaseline` 改为平移单元；`docFingerprint` 移出测试目录；vmark ledger 按 LiteMd 方言重录；未命名文档名「Untitled」随界面语言（mygo i18n，M2）；自建文件菜单后验证保存前收齐与快捷键冲突。
