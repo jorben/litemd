@@ -1,6 +1,9 @@
 package settings
 
-import "github.com/egoist/mygo"
+import (
+	"github.com/egoist/mygo"
+	"github.com/jorben/litemd/internal/l10n"
+)
 
 var win *mygo.Window
 
@@ -13,7 +16,7 @@ func ShowWindow(harden func(*mygo.Window)) {
 		return
 	}
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title:           "设置",
+		Title:           l10n.T("设置"),
 		URL:             "/#/settings",
 		Width:           600,
 		Height:          540,

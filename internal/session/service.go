@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/jorben/litemd/internal/doc"
+	"github.com/jorben/litemd/internal/l10n"
 )
 
 // Docs 是 LiteMd 的文档集合类型。
@@ -362,7 +363,7 @@ func SaveAsUTF8(w *mygo.Window, d *Document) error {
 	if st.Path == "" {
 		def = st.Name + ".md"
 	}
-	target, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: w, Title: "另存为 UTF-8", DefaultPath: def,
+	target, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: w, Title: l10n.T("另存为 UTF-8"), DefaultPath: def,
 		Filters: []mygo.FileFilter{{Name: "Markdown", Extensions: []string{"md", "markdown", "mdown", "mkd", "txt"}}}})
 	if err != nil {
 		if errors.Is(err, mygo.ErrCanceled) {

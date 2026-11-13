@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/jorben/litemd/internal/l10n"
 
 	"github.com/jorben/litemd/internal/session"
 )
@@ -126,21 +127,21 @@ func (Service) Open(ctx context.Context, href string) error {
 		return mygo.Shell.OpenExternal(target)
 	case Markdown:
 		if _, err := os.Stat(target); err != nil {
-			message(w, mygo.MessageWarning, "找不到「"+filepath.Base(target)+"」", target, []string{"好"})
+			message(w, mygo.MessageWarning, l10n.F("找不到「%s」", filepath.Base(target)), target, []string{l10n.T("好")})
 			return ErrNotFound
 		}
 		return session.OpenPath(target)
 	case LocalFile:
 		if _, err := os.Stat(target); err != nil {
-			message(w, mygo.MessageWarning, "找不到「"+filepath.Base(target)+"」", target, []string{"好"})
+			message(w, mygo.MessageWarning, l10n.F("找不到「%s」", filepath.Base(target)), target, []string{l10n.T("好")})
 			return ErrNotFound
 		}
-		if message(w, mygo.MessageQuestion, "要用默认应用打开这个文件吗？", target, []string{"打开", "取消"}) != 0 {
+		if message(w, mygo.MessageQuestion, l10n.T("要用默认应用打开这个文件吗？"), target, []string{l10n.T("打开"), l10n.T("取消")}) != 0 {
 			return nil
 		}
 		return mygo.Shell.OpenPath(target)
 	case Executable:
-		message(w, mygo.MessageWarning, "LiteMd 不会打开可执行文件", "为了安全，文档中指向程序或脚本的链接不会被打开：\n"+target, []string{"好"})
+		message(w, mygo.MessageWarning, l10n.T("LiteMd 不会打开可执行文件"), l10n.F("为了安全，文档中指向程序或脚本的链接不会被打开：\n%s", target), []string{l10n.T("好")})
 		return ErrRefused
 	case Anchor:
 		return nil

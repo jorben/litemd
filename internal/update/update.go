@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/jorben/litemd/internal/l10n"
 )
 
 // Status 是发给页面的更新状态。
@@ -51,7 +52,7 @@ func Check(manual bool) {
 	if !mygo.Updater.Enabled() {
 		set(Status{State: "disabled"})
 		if manual {
-			info("当前版本不能自动更新", "开发版本或安装位置不可写时无法自动更新。")
+			info(l10n.T("当前版本不能自动更新"), l10n.T("开发版本或安装位置不可写时无法自动更新。"))
 		}
 		return
 	}
@@ -62,14 +63,14 @@ func Check(manual bool) {
 	if err != nil {
 		set(Status{State: "error", Message: err.Error()})
 		if manual {
-			info("检查更新失败", err.Error())
+			info(l10n.T("检查更新失败"), err.Error())
 		}
 		return
 	}
 	if up == nil {
 		set(Status{State: "none"})
 		if manual {
-			info("LiteMd 已是最新版本", "当前版本 "+mygo.App.Version())
+			info(l10n.T("LiteMd 已是最新版本"), l10n.F("当前版本 %s", mygo.App.Version()))
 		}
 		return
 	}
@@ -82,7 +83,7 @@ func Check(manual bool) {
 }
 
 func info(msg, detail string) {
-	_, _ = mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageInfo, Message: msg, Detail: detail, Buttons: []string{"好"}})
+	_, _ = mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageInfo, Message: msg, Detail: detail, Buttons: []string{l10n.T("好")}})
 }
 
 // Install 在启动后延迟检查一次（enabled 为设置中的「自动检查更新」）。

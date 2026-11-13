@@ -1,0 +1,72 @@
+// 页面文案的英文表（PRD F12）。键是简体中文源文案；{x} 为占位符。
+// src/shell/i18n.test.ts 会检查外壳里每条 t() 文案都有英文。
+export const EN: Record<string, string> = {
+  // 状态栏、模式
+  "预览": "Preview", "所见即所得": "WYSIWYG", "源码": "Source", "分屏": "Split", "查看模式": "View mode",
+  "交换左右": "Swap sides", "已保存": "Saved", "未保存": "Unsaved", "编辑中…": "Editing…", "只读": "Read-only", "冲突": "Conflict",
+  "已删除": "Deleted", "已导出": "Exported", "{n} 字": "{n} words", "{n} 个字符 · 约 {m} 分钟读完": "{n} characters · about {m} min read",
+  "切换到所见即所得": "Switch to WYSIWYG",
+  // 启动窗口
+  "新建": "New", "打开…": "Open…", "也可以把 .md 文件拖到这里": "Or drop a .md file here",
+  // 查找
+  "查找": "Find", "查找内容": "Find", "替换": "Replace", "替换为": "Replace with", "全部替换": "Replace All",
+  "上一个": "Previous", "下一个": "Next", "区分大小写": "Match Case", "全词匹配": "Whole Word", "正则表达式": "Regular Expression",
+  "无结果": "No results", "关闭查找": "Close Find", "预览模式只能查找。": "Preview mode is find-only.",
+  // 大纲
+  "大纲": "Outline", "收起大纲": "Hide Outline", "文档里还没有标题": "This document has no headings yet",
+  // 提示条
+  "提示": "Notice", "关闭提示": "Dismiss", "撤销": "Undo", "保留": "Keep", "稍后": "Later", "取消": "Cancel", "重新载入": "Reload",
+  "磁盘上的文件已被修改": "The file changed on disk", "磁盘上的文件已被其他应用修改": "The file was changed by another app",
+  "你在这里还有未保存的改动。选择保留哪个版本。": "You have unsaved changes here. Choose which version to keep.",
+  "保留我的版本": "Keep My Version", "载入磁盘版本": "Load Disk Version", "丢弃，载入磁盘版本": "Discard and Load Disk Version",
+  "文件已被删除或移走": "The file was deleted or moved", "窗口里的内容仍然保留，自动保存已暂停。": "The content in this window is kept. Autosave is paused.",
+  "存储…": "Save…", "另存为…": "Save As…", "存储副本…": "Save a Copy…", "另存为 UTF-8…": "Save as UTF-8…",
+  "此文件为只读": "This file is read-only",
+  "文件权限不允许写入，可以阅读、查找和复制，也可以存储一份副本后编辑。": "File permissions don't allow writing. You can read, search and copy, or save a copy to edit.",
+  "此文件不是 UTF-8 编码（按 {enc} 显示），暂不支持编辑": "This file isn't UTF-8 (shown as {enc}), so it can't be edited",
+  "另存为 UTF-8 后可以正常编辑，原文件不会改动。": "Save it as UTF-8 to edit. The original file won't be changed.",
+  "已恢复上次未保存的内容": "Recovered unsaved changes",
+  "LiteMd 上次没有正常退出，这些改动还没有写入磁盘。": "LiteMd didn't quit normally last time. These changes weren't written to disk yet.",
+  "文件较大，已用源码模式打开": "Large file opened in source mode", "文件超过 20 MB，已用只读源码模式打开": "File over 20 MB opened read-only in source mode",
+  "超过 5 MB 的文件默认用源码模式，保证输入流畅；超过 20 MB 时只读打开。": "Files over 5 MB open in source mode to keep typing smooth; files over 20 MB open read-only.",
+  "本次修改调整了全文格式": "This edit reformatted the whole document",
+  "这次编辑无法只改动局部，已按规范格式重写全文。可以撤销。": "This edit couldn't be kept local, so the document was rewritten in canonical format. You can undo it.",
+  "「加载网络图片」设置已更改": "The “Load network images” setting changed", "重新载入后对这个窗口生效。": "Reload to apply it to this window.",
+  "图片没有保存": "The image wasn't saved", "请先保存文档，再粘贴图片": "Save the document before pasting images",
+  "图片会存到文档旁边的 assets 文件夹，未命名文档还没有位置。": "Images are saved in an assets folder next to the document; an untitled document has no location yet.",
+  "这张网络图片没有加载": "This network image didn't load",
+  "LiteMd {v} 已下载": "LiteMd {v} downloaded", "重启后完成更新，未保存的内容会先保存。": "Restart to finish updating. Unsaved changes are saved first.",
+  "立即重启": "Restart Now",
+  // 格式栏
+  "格式": "Format", "加粗": "Bold", "斜体": "Italic", "删除线": "Strikethrough", "行内代码": "Inline Code", "链接": "Link",
+  "标题 1": "Heading 1", "标题 2": "Heading 2", "标题 3": "Heading 3", "正文": "Paragraph",
+  // 导出
+  "导出 HTML": "Export HTML", "导出 PDF": "Export PDF", "导出…": "Export…", "导出失败": "Export failed", "本地图片": "Local images",
+  "内嵌到文件中": "Embed in the file", "保留相对路径": "Keep relative paths", "纸张": "Paper",
+  // 设置
+  "设置": "Settings", "通用": "General", "编辑": "Editing", "外观": "Appearance", "隐私": "Privacy", "关于": "About",
+  "打开文件时": "Open files in", "记住每个文件上次的模式": "The mode last used for each file",
+  "出厂默认以预览打开，按 {mod}E 或双击进入编辑。": "Files open in Preview by default. Press {mod}E or double-click to edit.",
+  "保存": "Saving", "自动保存已存在的文件": "Autosave existing files", "重启 LiteMd 后生效。": "Takes effect after restarting LiteMd.",
+  "停止输入约 1 秒后写入磁盘；未命名文档关闭时询问。": "Writes to disk about 1 second after you stop typing; untitled documents ask on close.",
+  "窗口": "Windows", "按文件记住窗口大小和位置": "Remember window size and position per file", "重启后生效。": "Takes effect after restart.",
+  "界面语言": "Language", "跟随系统": "System", "简体中文": "简体中文", "重启后生效。文档内容不会被翻译。": "Takes effect after restart. Document content isn't translated.",
+  "粘贴的图片存到": "Save pasted images to", "./<文件名>.assets/": "./<file name>.assets/", "与文件同一目录": "The file's folder",
+  "自定义相对路径": "Custom relative path",
+  "文件名为 image-年月日-时分秒.png，重名时自动加序号。": "Named image-YYYYMMDD-HHMMSS.png, with a number added when the name is taken.",
+  "粘贴": "Paste", "把网页和富文本转换为 Markdown": "Convert web pages and rich text to Markdown",
+  "需要纯文本时用 {keys}。": "Use {keys} for plain text.", "拼写检查": "Spelling", "检查拼写": "Check spelling",
+  "代码块 Tab 宽度": "Code block tab width", "2 个空格": "2 spaces", "4 个空格": "4 spaces", "8 个空格": "8 spaces",
+  "主题": "Theme", "浅色": "Light", "深色": "Dark", "字号": "Font size", "{mod}+ / {mod}- 调整，{mod}0 还原。": "{mod}+ / {mod}- to adjust, {mod}0 to reset.",
+  "正文宽度": "Text width", "窄": "Narrow", "中": "Medium", "宽": "Wide", "铺满": "Full",
+  "正文字体": "Body font", "系统默认（苹方 / 微软雅黑）": "System default", "宋体": "Serif (Song)", "楷体": "Kai",
+  "代码字体": "Code font", "系统等宽字体": "System monospace",
+  "网络图片": "Network images", "加载文档中的网络图片": "Load network images in documents",
+  "关闭后不加载网络图片。已打开的窗口需重新载入。": "When off, network images aren't loaded. Open windows need a reload.",
+  "更新": "Updates", "自动检查更新": "Check for updates automatically", "检查时不上传任何个人数据。": "No personal data is sent when checking.",
+  "数据": "Data", "LiteMd 没有账号，不收集使用统计，也不会自动上报崩溃。": "LiteMd has no accounts, collects no usage statistics and never reports crashes automatically.",
+  "版本": "Version", "一个文件，一个窗口，所见即所得，原文不走样。": "One file, one window. What you see is what you get, and your text stays as written.",
+  "检查更新": "Check for Updates", "开源许可": "Open Source Licenses",
+  "LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、golang.org/x/text（BSD-3-Clause）。完整清单见 THIRD_PARTY.md。":
+    "LiteMd is released under the Apache-2.0 license. Third-party code included: vmark (ISC), mygo (MIT), Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified (MIT), DOMPurify (Apache-2.0 / MPL-2.0), golang.org/x/text (BSD-3-Clause). See THIRD_PARTY.md for the full list.",
+};

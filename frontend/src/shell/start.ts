@@ -2,13 +2,14 @@
 import { Settings, Start } from "../mygo";
 import { setSettings, getSettings } from "../settings/store";
 import { applyAppearance, watchSystemTheme } from "./theme";
-import { t } from "./i18n";
+import { applyLanguage, t } from "./i18n";
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent);
 
 export async function startPage(app: HTMLElement): Promise<void> {
   try {
     setSettings(await Settings.get());
+    applyLanguage();
   } catch {
     /* 设置读取失败时用默认值 */
   }

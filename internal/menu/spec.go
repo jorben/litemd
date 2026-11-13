@@ -7,6 +7,8 @@
 //   - Page：通过 command 事件发给当前窗口的页面，由页面的命令注册表执行。
 package menu
 
+import "github.com/jorben/litemd/internal/l10n"
+
 // Kind 是菜单项的执行方式。
 type Kind int
 
@@ -50,8 +52,18 @@ func sub(label string, items ...Spec) Spec {
 	return Spec{Label: label, Kind: KindSubmenu, Items: items}
 }
 
-// Build 返回某个平台的菜单栏。mac 为 true 时按 macOS 惯例（D9）。
-func Build(mac bool) []Spec {
+// Build 返回某个平台的菜单栏，标签按界面语言翻译（F12）。mac 为 true 时按 macOS 惯例（D9）。
+func Build(mac bool) []Spec { return localize(build(mac)) }
+
+func localize(items []Spec) []Spec {
+	for i := range items {
+		items[i].Label = l10n.T(items[i].Label)
+		items[i].Items = localize(items[i].Items)
+	}
+	return items
+}
+
+func build(mac bool) []Spec {
 	file := []Spec{
 		roleL("new", "新建"),
 		roleL("open", "打开…"),

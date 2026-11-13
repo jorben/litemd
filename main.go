@@ -14,6 +14,7 @@ import (
 	"github.com/jorben/litemd/internal/doc"
 	"github.com/jorben/litemd/internal/export"
 	"github.com/jorben/litemd/internal/filestate"
+	"github.com/jorben/litemd/internal/l10n"
 	"github.com/jorben/litemd/internal/links"
 	"github.com/jorben/litemd/internal/menu"
 	"github.com/jorben/litemd/internal/session"
@@ -28,6 +29,7 @@ func main() {
 	}
 	settings.Load() // 自动保存模式只能在 NewDocuments 时设定（D11）
 	filestate.Load(settings.Default.Get().RestoreWindow)
+	l10n.Init(settings.Default.Get().Language) // F12：界面语言重启后生效
 	assets.CurrentRule = func() assets.Rule {
 		st := settings.Default.Get()
 		return assets.Rule{Kind: st.ImageRule, Custom: st.ImageCustom}
@@ -147,8 +149,8 @@ func installMenu() {
 		"revert": docOp(func(d *session.Document) error {
 			// 还原前用 LiteMd 自己的文案确认（Document.Revert 本身不询问）
 			r, err := mygo.Dialog.Message(mygo.MessageOptions{Parent: d.Window(), Type: mygo.MessageWarning,
-				Message: "将「" + d.State().Name + "」还原到上次保存的版本？", Detail: "当前未保存的改动会丢失。",
-				Buttons: []string{"还原", "取消"}, DefaultButton: 0, CancelButton: 1, DestructiveButtons: []int{0}})
+				Message: l10n.F("将「%s」还原到上次保存的版本？", d.State().Name), Detail: l10n.T("当前未保存的改动会丢失。"),
+				Buttons: []string{l10n.T("还原"), l10n.T("取消")}, DefaultButton: 0, CancelButton: 1, DestructiveButtons: []int{0}})
 			if err != nil || r.Button != 0 {
 				return err
 			}
@@ -163,11 +165,11 @@ func installMenu() {
 		"check-update": func(*mygo.Window) { go update.Check(true) },
 		"install-cli": func(*mygo.Window) {
 			go func() {
-				msg, detail := "已安装 litemd 命令", "之后可以在终端用 litemd 文件.md 打开文件。"
+				msg, detail := l10n.T("已安装 litemd 命令"), l10n.T("之后可以在终端用 litemd 文件.md 打开文件。")
 				if err := clitool.Install(); err != nil {
-					msg, detail = "没有安装命令行工具", err.Error()
+					msg, detail = l10n.T("没有安装命令行工具"), err.Error()
 				}
-				_, _ = mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageInfo, Message: msg, Detail: detail, Buttons: []string{"好"}})
+				_, _ = mygo.Dialog.Message(mygo.MessageOptions{Type: mygo.MessageInfo, Message: msg, Detail: detail, Buttons: []string{l10n.T("好")}})
 			}()
 		},
 		"help":        openURL("https://github.com/jorben/litemd#readme"),

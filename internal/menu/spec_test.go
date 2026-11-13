@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jorben/litemd/internal/l10n"
 )
 
 // 每个平台的加速键不能重复（D9、docs/keybindings.md）。
@@ -125,4 +127,24 @@ func TestAcceleratorsGolden(t *testing.T) {
 	if err != nil || string(got) != string(b) {
 		t.Fatalf("testdata/accelerators.json 过期：LITEMD_UPDATE_GOLDEN=1 go test ./internal/menu")
 	}
+}
+
+// F12：英文界面下每个菜单标签都有译文
+func TestEnglishLabels(t *testing.T) {
+	l10n.SetEnglish(true)
+	defer l10n.SetEnglish(false)
+	var walk func([]Spec)
+	walk = func(items []Spec) {
+		for _, it := range items {
+			for _, r := range it.Label {
+				if r >= 0x4e00 && r <= 0x9fff {
+					t.Errorf("没有英文：%q", it.Label)
+					break
+				}
+			}
+			walk(it.Items)
+		}
+	}
+	walk(Build(true))
+	walk(Build(false))
 }

@@ -3,7 +3,7 @@
 import { Settings, Update, events, type View } from "../mygo";
 import { getSettings, setSettings } from "../settings/store";
 import { applyAppearance, FONT_STEPS, watchSystemTheme } from "./theme";
-import { t } from "./i18n";
+import { applyLanguage, t } from "./i18n";
 
 type Tab = "general" | "edit" | "look" | "privacy" | "about";
 const TABS: Array<[Tab, string]> = [["general", "通用"], ["edit", "编辑"], ["look", "外观"], ["privacy", "隐私"], ["about", "关于"]];
@@ -14,6 +14,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
   let view: View = await Settings.get();
   const version = await Settings.appVersion().catch(() => "");
   setSettings(view);
+  applyLanguage();
   applyAppearance(getSettings());
   watchSystemTheme(getSettings);
   document.title = t("设置");
@@ -52,7 +53,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
       case "general":
         return (
           row("打开文件时", sel("defaultMode", [["preview", "预览"], ["wysiwyg", "所见即所得"], ["source", "源码"], ["remember", "记住每个文件上次的模式"]]),
-            t(`出厂默认以预览打开，按 ${mod}E 或双击进入编辑。`)) +
+            t("出厂默认以预览打开，按 {mod}E 或双击进入编辑。", { mod })) +
           row("保存", chk("autosave", "自动保存已存在的文件"),
             view.autosave !== view.autosaveEffective ? t("重启 LiteMd 后生效。") : t("停止输入约 1 秒后写入磁盘；未命名文档关闭时询问。"),
             view.autosave !== view.autosaveEffective) +
@@ -65,7 +66,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
           row("粘贴的图片存到", radio("imageRule", [["assets", "./assets/"], ["named", "./<文件名>.assets/"], ["same", "与文件同一目录"], ["custom", "自定义相对路径"]]) +
             (view.imageRule === "custom" ? `<input type="text" data-k="imageCustom" value="${esc(view.imageCustom)}" aria-label="${t("自定义相对路径")}">` : ""),
             t("文件名为 image-年月日-时分秒.png，重名时自动加序号。")) +
-          row("粘贴", chk("pasteRich", "把网页和富文本转换为 Markdown"), t(`需要纯文本时用 ${isMac ? "⌥⇧⌘V" : "Ctrl+Alt+Shift+V"}。`)) +
+          row("粘贴", chk("pasteRich", "把网页和富文本转换为 Markdown"), t("需要纯文本时用 {keys}。", { keys: isMac ? "⌥⇧⌘V" : "Ctrl+Alt+Shift+V" })) +
           row("拼写检查", chk("spellCheck", "检查拼写")) +
           row("代码块 Tab 宽度", sel("tabWidth", [[2, "2 个空格"], [4, "4 个空格"], [8, "8 个空格"]]))
         );
@@ -73,7 +74,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
         return (
           row("主题", radio("theme", [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]])) +
           row("字号", `<div class="inline"><input type="range" min="0" max="${FONT_STEPS.length - 1}" step="1" data-k="fontScale" value="${Math.max(0, FONT_STEPS.indexOf(view.fontScale))}" aria-label="${t("字号")}"><span>${Math.round(16 * view.fontScale)} px</span></div>`,
-            t(`${mod}+ / ${mod}- 调整，${mod}0 还原。`)) +
+            t("{mod}+ / {mod}- 调整，{mod}0 还原。", { mod })) +
           row("正文宽度", `<div class="lm-seg" role="radiogroup">${[["narrow", "窄"], ["medium", "中"], ["wide", "宽"], ["full", "铺满"]].map(([v, l]) => `<button role="radio" data-k="width" data-v="${v}" aria-checked="${view.width === v}">${t(l!)}</button>`).join("")}</div>`) +
           `<div class="sep"></div>` +
           row("正文字体", sel("bodyFont", [["system", "系统默认（苹方 / 微软雅黑）"], ["serif", "宋体"], ["kai", "楷体"]])) +

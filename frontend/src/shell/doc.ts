@@ -18,7 +18,7 @@ import { bindFindToVmark, findState, onFind, replaceAllInWysiwyg, replaceCurrent
 import { commandForKey, Deduper } from "./keys";
 import { countWords, sourceHeadings } from "./text";
 import { buildExportHtml } from "./exportHtml";
-import { t } from "./i18n";
+import { applyLanguage, t } from "./i18n";
 
 export type Mode = "preview" | "wysiwyg" | "source" | "split";
 const MODES: Mode[] = ["preview", "wysiwyg", "source", "split"];
@@ -65,6 +65,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
   ]);
   realHost.info = info;
   setSettings(view);
+  applyLanguage();
   applyAppearance(getSettings());
   watchSystemTheme(getSettings);
   applyNetworkImagePolicy(getSettings());
@@ -304,7 +305,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
       ${mode === "split" ? `<button class="lm-icon" data-act="swap" title="${t("交换左右")}" aria-label="${t("交换左右")}">${svg(ICON.swap)}</button>` : ""}
       <span class="lm-gap"></span>
       <span class="lm-sb lm-save ${cls}" role="status"><span class="dot"></span>${label}</span>
-      <span class="lm-sb" title="${c.chars.toLocaleString()} ${t("个字符")} · ${t("约")} ${c.minutes} ${t("分钟读完")}">${c.words.toLocaleString()} ${t("字")}</span>
+      <span class="lm-sb" title="${t("{n} 个字符 · 约 {m} 分钟读完", { n: c.chars.toLocaleString(), m: c.minutes })}">${t("{n} 字", { n: c.words.toLocaleString() })}</span>
       ${enc}`;
   }
 
@@ -406,7 +407,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
   // F11.4：更新已下载，提示重启（未保存的内容由退出流程收齐、保存或保留）
   const onUpdate = (u: UpdateStatus) => {
     if (u.state !== "ready") return;
-    showBanner({ key: "update", kind: "info", title: t(`LiteMd ${u.version} 已下载`), detail: t("重启后完成更新，未保存的内容会先保存。"),
+    showBanner({ key: "update", kind: "info", title: t("LiteMd {v} 已下载", { v: u.version }), detail: t("重启后完成更新，未保存的内容会先保存。"),
       actions: [{ label: t("立即重启"), primary: true, run: async () => { await sync.push(); await Update.restart(); } }, { label: t("稍后"), run: () => {} }] });
   };
   events.updateStatus.on(onUpdate);
@@ -458,7 +459,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
       ] });
   }
   if (info.lossy) {
-    showBanner({ key: "lossy", kind: "warn", title: t(`此文件不是 UTF-8 编码（按 ${info.encoding.toUpperCase()} 显示），暂不支持编辑`),
+    showBanner({ key: "lossy", kind: "warn", title: t("此文件不是 UTF-8 编码（按 {enc} 显示），暂不支持编辑", { enc: info.encoding.toUpperCase() }),
       detail: t("另存为 UTF-8 后可以正常编辑，原文件不会改动。"), actions: [{ label: t("另存为 UTF-8…"), primary: true, run: () => Session.saveAsUTF8() }] });
   } else if (info.readOnly) {
     showBanner({ key: "readonly", kind: "info", title: t("此文件为只读"), detail: t("文件权限不允许写入，可以阅读、查找和复制，也可以存储一份副本后编辑。"),
