@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { aliases } from "./aliases";
+import { aliases } from "./aliases.ts";
 
 export default defineConfig({
   resolve: { alias: aliases },
