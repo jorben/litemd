@@ -67,6 +67,6 @@ export const EN: Record<string, string> = {
   "数据": "Data", "LiteMd 没有账号，不收集使用统计，也不会自动上报崩溃。": "LiteMd has no accounts, collects no usage statistics and never reports crashes automatically.",
   "版本": "Version", "一个文件，一个窗口，所见即所得，原文不走样。": "One file, one window. What you see is what you get, and your text stays as written.",
   "检查更新": "Check for Updates", "开源许可": "Open Source Licenses",
-  "LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、golang.org/x/text（BSD-3-Clause）。完整清单见 THIRD_PARTY.md。":
-    "LiteMd is released under the Apache-2.0 license. Third-party code included: vmark (ISC), mygo (MIT), Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified (MIT), DOMPurify (Apache-2.0 / MPL-2.0), golang.org/x/text (BSD-3-Clause). See THIRD_PARTY.md for the full list.",
+  "LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、highlight.js、golang.org/x/text（BSD-3-Clause）、elkjs（EPL-2.0）。完整清单见 THIRD_PARTY.md。":
+    "LiteMd is released under the Apache-2.0 license. Third-party code included: vmark (ISC), mygo (MIT), Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified (MIT), DOMPurify (Apache-2.0 / MPL-2.0), highlight.js, golang.org/x/text (BSD-3-Clause), elkjs (EPL-2.0). See THIRD_PARTY.md for the full list.",
 };

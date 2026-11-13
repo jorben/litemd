@@ -39,6 +39,11 @@ type MdContent struct {
 	EOL      string `json:"eol"`      // 原文件的主要换行符：LF 或 CRLF
 	Encoding string `json:"encoding"` // UTF8、UTF16LE、UTF16BE、GB18030
 	Lossy    bool   `json:"lossy"`    // 非 UTF-8：只读，禁止写回
+	// 混合换行（CRLF 与 LF 并存）的文件：原文的归一化正文与每行的换行符（'1' 为 CRLF），
+	// 写回时未改动的行沿用原来的换行符，改动的行用主要换行符（D3：不改没动过的地方）。
+	// 不导出：不进 JSON，值复制（SetContent）时随内容保留。
+	mixedOrig string
+	mixedEOLs string
 }
 
 // ErrLossy 由 Write 返回：非 UTF-8 文档不能写回（D14），要用「另存为 UTF-8」。
@@ -83,7 +88,99 @@ func Decode(b []byte) MdContent {
 		c.EOL = CRLF
 	}
 	c.Text = strings.ReplaceAll(text, "\r\n", "\n")
+	if crlf > 0 && lf > 0 {
+		var m strings.Builder
+		for _, l := range strings.SplitAfter(text, "\n") {
+			if strings.HasSuffix(l, "\n") {
+				m.WriteByte(map[bool]byte{true: '1', false: '0'}[strings.HasSuffix(l, "\r\n")])
+			}
+		}
+		c.mixedOrig, c.mixedEOLs = c.Text, m.String()
+	}
 	return c
+}
+
+// encodeMixed 还原混合换行：按行对比原文与当前正文，相同的行用原换行符，其余用主要换行符。
+func (c MdContent) encodeMixed() string {
+	a := strings.Split(c.mixedOrig, "\n")
+	b := strings.Split(c.Text, "\n")
+	major := c.EOL
+	eolB := make([]string, len(b)) // b 中第 i 行之后的换行符
+	for i := range eolB {
+		eolB[i] = major
+	}
+	origEOL := func(i int) string {
+		if i < len(c.mixedEOLs) && c.mixedEOLs[i] == '1' {
+			return CRLF
+		}
+		return LF
+	}
+	// 公共前缀、公共后缀
+	p := 0
+	for p < len(a) && p < len(b) && a[p] == b[p] {
+		eolB[p] = origEOL(p)
+		p++
+	}
+	sa, sb := len(a), len(b)
+	for sa > p && sb > p && a[sa-1] == b[sb-1] {
+		sa--
+		sb--
+		eolB[sb] = origEOL(sa)
+	}
+	// 中间段：规模不大时用 LCS 找出未改动的行
+	n, m := sa-p, sb-p
+	if n > 0 && m > 0 && n*m <= 4_000_000 {
+		dp := make([][]int32, n+1)
+		for i := range dp {
+			dp[i] = make([]int32, m+1)
+		}
+		for i := n - 1; i >= 0; i-- {
+			for j := m - 1; j >= 0; j-- {
+				if a[p+i] == b[p+j] {
+					dp[i][j] = dp[i+1][j+1] + 1
+				} else {
+					dp[i][j] = max(dp[i+1][j], dp[i][j+1])
+				}
+			}
+		}
+		// 沿 LCS 走：相同的行沿用原换行符；两个相同行之间的未匹配行按顺序一一对应原文的行
+		// （改写一行时保留该行原来的换行符），多出来的新行用主要换行符
+		gi, gj := 0, 0 // 当前间隙的起点
+		flush := func(i, j int) {
+			for k := 0; gi+k < i && gj+k < j; k++ {
+				eolB[p+gj+k] = origEOL(p + gi + k)
+			}
+		}
+		i, j := 0, 0
+		for i < n && j < m {
+			switch {
+			case a[p+i] == b[p+j]:
+				flush(i, j)
+				eolB[p+j] = origEOL(p + i)
+				i++
+				j++
+				gi, gj = i, j
+			case dp[i+1][j] >= dp[i][j+1]:
+				i++
+			default:
+				j++
+			}
+		}
+		flush(n, m)
+	} else {
+		for k := 0; k < n && k < m; k++ {
+			eolB[p+k] = origEOL(p + k)
+		}
+	}
+	var out strings.Builder
+	out.Grow(len(c.Text) + len(b))
+	for i, l := range b {
+		out.WriteString(l)
+		if i < len(b)-1 {
+			out.WriteString(eolB[i])
+		}
+	}
+	return out.String()
 }
 
 func decodeUTF16(b []byte, order unicode.Endianness) string {
@@ -105,7 +202,9 @@ func decodeGB18030(b []byte) string {
 // Encode 把内容编码为要写盘的 UTF-8 字节：还原换行符和 BOM。
 func (c MdContent) Encode() []byte {
 	text := c.Text
-	if c.EOL == CRLF {
+	if c.mixedOrig != "" {
+		text = c.encodeMixed()
+	} else if c.EOL == CRLF {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
 	}
 	if c.BOM {
@@ -137,7 +236,7 @@ func Equal(a, b MdContent) bool { return a == b }
 
 // UTF8Copy 返回另存为 UTF-8 时写出的内容：正文不变，编码改为 UTF-8、无 BOM，换行沿用原文件。
 func (c MdContent) UTF8Copy() MdContent {
-	return MdContent{Text: c.Text, EOL: c.EOL, Encoding: UTF8}
+	return MdContent{Text: c.Text, EOL: c.EOL, Encoding: UTF8, mixedOrig: c.mixedOrig, mixedEOLs: c.mixedEOLs}
 }
 
 // WriteFileAtomic 把内容原子写入 path（临时文件 + rename），保留已有文件的权限。

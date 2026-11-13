@@ -91,7 +91,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
         return `<div class="about"><img src="/icon.svg" alt="" class="about-icon"><h2>LiteMd</h2><p>${t("版本")} ${esc(version)}</p>
           <p>${t("一个文件，一个窗口，所见即所得，原文不走样。")}</p>
           <div class="inline center"><button class="lm-btn" data-act="update">${t("检查更新")}</button><button class="lm-btn" data-act="lic">${t("开源许可")}</button></div>
-          <div class="lic" ${licOpen ? "" : "hidden"}>${t("LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、golang.org/x/text（BSD-3-Clause）。完整清单见 THIRD_PARTY.md。")}</div></div>`;
+          <div class="lic" ${licOpen ? "" : "hidden"}>${t("LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、highlight.js、golang.org/x/text（BSD-3-Clause）、elkjs（EPL-2.0）。完整清单见 THIRD_PARTY.md。")}</div></div>`;
     }
   }
 

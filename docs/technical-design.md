@@ -753,3 +753,4 @@ CI：PR 上跑 Go 测试、前端类型检查、lint、单元测试和保真回�
 | 3.6 节：菜单可用状态 | 没有聚焦窗口时不刷新菜单 | 从命令行启动、应用未激活时 `FocusedWindow()` 为 nil，会把文档类菜单项全部置灰（M1 实测发现） |
 | 5.2 节：脏标记 | `markDirty` 之后若 mygo 自动保存把文档标回未编辑而页面仍有未推送编辑，重新标记并立即收齐 | M0 V2 发现的竞态 |
 | 3.4 节：Session 服务 | 增加 `state`、`saveAs`、`duplicate`；新增 `Export.choosePath/writeChosen`（只能写对话框选择的路径）、`Shell.readClipboardText` | 页面启动取文档状态；vmark 图表导出、粘贴为 Markdown 需要 |
+| 3.2 节：MdContent 只记主要换行符 | 混合换行（CRLF 与 LF 并存）的文件另记每行原换行符；写回时按行对比原文（前后缀 + LCS），未改动的行与被改写的行沿用原换行符，新增行用主要换行符 | v1 回归发现：混合换行文件改一处会把全文换行统一，违反 D3（`internal/doc/corpus_test.go`） |

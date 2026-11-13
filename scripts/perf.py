@@ -1,31 +1,44 @@
 #!/usr/bin/env python3
-# M0 V6 性能测量：冷启动、已运行时打开新文件、内存、1 MB 文档输入。
-import glob, json, os, subprocess, time
+# NF1–NF4 测量（docs/perf-report.md）：冷启动、已运行时打开新文件、多窗口内存、1 MB 文档在
+# 所见即所得 / 源码模式下的输入延迟、保真写回耗时、安装包大小。
+#
+# 先构建带自动化插件的非调试版本：
+#   GOFLAGS=-tags=e2e go tool mygo build -skip-dmg -o /tmp/litemd-perf
+# 再运行：python3 scripts/perf.py [DMG 路径]
+import glob, json, os, statistics, subprocess, sys, time
 
-APP = "/tmp/litemd-e2e/darwin-arm64/LiteMd.app/Contents/MacOS/LiteMd"
-D = "/tmp/litemd-m0/perf"
-SOCK = "/tmp/litemd-m0/app.sock"
-CORPUS = "/Users/jorben/Documents/Codespace/litemd/testdata/fidelity"
+APP = "/tmp/litemd-perf/darwin-arm64/LiteMd.app/Contents/MacOS/LiteMd"
+D = "/tmp/litemd-perf-docs"
+SOCK = "/tmp/litemd-perf-docs/app.sock"
+CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "testdata", "fidelity")
 os.makedirs(D, exist_ok=True)
+
 
 def ma(*args):
     return subprocess.run(["mygo-automation", *args], capture_output=True, text=True).stdout.strip()
 
+
 def make_doc(name, size):
-    parts, n = [], 0
+    parts, n, i = [], 0, 0
     files = sorted(glob.glob(CORPUS + "/**/*.md", recursive=True))
-    i = 0
     while n < size:
         t = open(files[i % len(files)], encoding="utf-8", errors="replace").read()
-        parts.append(t); n += len(t.encode()); i += 1
+        parts.append(t)
+        n += len(t.encode())
+        i += 1
     p = os.path.join(D, name)
-    open(p, "w").write("\n\n".join(parts)[:size])
+    text = "\n\n".join(parts).encode()[:size].decode("utf-8", "ignore")
+    open(p, "w").write(text.rsplit("\n", 1)[0] + "\n")
     return p
 
-def stop():
-    subprocess.run(["pkill", "-f", APP]); time.sleep(0.8)
 
-def wait_ready(title, timeout=15):
+def stop():
+    subprocess.run(["pkill", "-f", APP])
+    time.sleep(0.8)
+
+
+def select(title, timeout=15):
+    """选中标题为 title 的窗口，返回其页面的 readyAt（内容渲染完成的绝对时间，毫秒）。"""
     end = time.time() + timeout
     while time.time() < end:
         for line in ma("windows").splitlines():
@@ -37,61 +50,99 @@ def wait_ready(title, timeout=15):
         time.sleep(0.05)
     raise SystemExit("timeout " + title)
 
+
 def rss_total():
     pid = subprocess.run(["pgrep", "-f", APP], capture_output=True, text=True).stdout.split()[0]
     out = subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,comm="], capture_output=True, text=True).stdout
     app, web = 0, 0
     for l in out.splitlines():
         f = l.split(None, 3)
-        if len(f) < 4: continue
-        if f[0] == pid: app = int(f[2])
-        elif "WebKit.WebContent" in f[3] or "WebKit.GPU" in f[3] or "WebKit.Networking" in f[3]: web += int(f[2])
+        if len(f) < 4:
+            continue
+        if f[0] == pid:
+            app = int(f[2])
+        elif "WebKit.WebContent" in f[3] or "WebKit.GPU" in f[3] or "WebKit.Networking" in f[3]:
+            web += int(f[2])
     return app / 1024, web / 1024
+
+
+def cpu_idle(seconds=5):
+    pid = subprocess.run(["pgrep", "-f", APP], capture_output=True, text=True).stdout.split()[0]
+    out = subprocess.run(["top", "-l", "2", "-s", str(seconds), "-pid", pid, "-stats", "cpu"], capture_output=True, text=True).stdout
+    vals = [l.strip() for l in out.splitlines() if l.strip().replace(".", "").isdigit()]
+    return float(vals[-1]) if vals else None
+
+
+# 每次按键：一次事务 + 强制布局（输入到可上屏的同步部分）；跳过前 20 次预热
+TYPE_WYSIWYG = """(async () => { await window.__litemd.setMode("wysiwyg"); const ed = window.__litemd.rich.editor;
+  const pos = Math.floor(ed.state.doc.content.size / 2); ed.commands.setTextSelection(pos);
+  const r = ed.view.coordsAtPos(ed.state.selection.from); ed.view.dom.closest(".editor-content").scrollTop += r.top - 300;
+  await new Promise(r => setTimeout(r, 300)); const ts = [];
+  for (let i = 0; i < 220; i++) { const t = performance.now();
+    ed.view.dispatch(ed.state.tr.insertText("字")); void ed.view.dom.offsetHeight;
+    if (i >= 20) ts.push(performance.now() - t); await new Promise(r => requestAnimationFrame(r)); }
+  ts.sort((a, b) => a - b); const p = q => +ts[Math.floor(q * (ts.length - 1))].toFixed(2);
+  return JSON.stringify({ p50: p(0.5), p95: p(0.95), max: p(1) }); })()"""
+TYPE_SOURCE = """(async () => { await window.__litemd.setMode("source"); const v = window.__litemd.source().view;
+  const pos = Math.floor(v.state.doc.length / 2); v.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+  await new Promise(r => setTimeout(r, 300)); const ts = [];
+  for (let i = 0; i < 220; i++) { const t = performance.now();
+    v.dispatch(v.state.replaceSelection("字"), { userEvent: "input.type" }); void v.dom.offsetHeight;
+    if (i >= 20) ts.push(performance.now() - t); await new Promise(r => requestAnimationFrame(r)); }
+  ts.sort((a, b) => a - b); const p = q => +ts[Math.floor(q * (ts.length - 1))].toFixed(2);
+  return JSON.stringify({ p50: p(0.5), p95: p(0.95), max: p(1) }); })()"""
+PUSH = """(async () => { const t = performance.now(); await window.__litemd.sync.push(); return performance.now() - t; })()"""
 
 res = {}
 small = make_doc("doc100k.md", 100_000)
 big = make_doc("doc1m.md", 1_000_000)
 others = [make_doc(f"doc100k-{i}.md", 100_000) for i in range(5)]
 
-# 冷启动（3 次取中位数）
+# NF1 冷启动（5 次取中位数），预览模式
 cold = []
-for k in range(3):
+for k in range(5):
     stop()
-    if os.path.exists(SOCK): os.remove(SOCK)
+    if os.path.exists(SOCK):
+        os.remove(SOCK)
     t0 = time.time() * 1000
-    subprocess.Popen([APP, small], env={**os.environ, "MYGO_AUTOMATION": SOCK},
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    while not os.path.exists(SOCK): time.sleep(0.01)
+    subprocess.Popen([APP, small], env={**os.environ, "MYGO_AUTOMATION": SOCK}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    while not os.path.exists(SOCK):
+        time.sleep(0.01)
     ma("open", "--socket", SOCK)
-    cold.append(wait_ready("doc100k.md") - t0)
-res["cold_start_ms"] = sorted(cold)
+    cold.append(round(select("doc100k.md") - t0))
+res["cold_start_ms"] = {"runs": sorted(cold), "median": statistics.median(cold)}
 
-# 已运行时打开新文件（第二实例转发）
+# NF1 已运行时打开新文件（第二实例启动并转发给第一实例）
 warm = []
 for p in others:
     t0 = time.time() * 1000
     subprocess.run([APP, p])
-    warm.append(wait_ready(os.path.basename(p)) - t0)
-res["open_running_ms"] = sorted(warm)
-time.sleep(2)
+    warm.append(round(select(os.path.basename(p)) - t0))
+res["open_running_ms"] = {"runs": sorted(warm), "median": statistics.median(warm)}
+
+# NF3 6 个窗口的内存与空闲 CPU
+time.sleep(3)
 a, w = rss_total()
 res["rss_6_windows_mb"] = {"app": round(a), "webkit": round(w), "per_window": round((a + w) / 6)}
+res["idle_cpu_percent"] = cpu_idle()
 
-# 1 MB 文档：打开耗时与 CodeMirror 输入（含推送序列化，源码模式不经保真层）
+# NF2 1 MB 文档：打开（预览）、所见即所得与源码输入、写回
 t0 = time.time() * 1000
 subprocess.run([APP, big])
-res["open_1mb_ms"] = round(wait_ready("doc1m.md") - t0)
-r = ma("eval", """(() => { const v = window.__litemd.view; const ts = [];
-  for (let i = 0; i < 200; i++) { const t = performance.now();
-    v.dispatch({ changes: { from: 500000, insert: "字" }, userEvent: "input.type" });
-    ts.push(performance.now() - t); }
-  ts.sort((a, b) => a - b); return JSON.stringify({ p50: ts[100], p95: ts[190], max: ts[199] }); })()""")
-res["input_1mb_dispatch_ms"] = json.loads(r)
-t = ma("eval", """(async () => { const t = performance.now(); await window.__litemd.sync.push(); return performance.now() - t; })()""")
-res["push_1mb_ms"] = round(float(t), 1)
+res["open_1mb_ms"] = round(select("doc1m.md") - t0)
+res["type_1mb_wysiwyg_ms"] = json.loads(ma("eval", TYPE_WYSIWYG))
+res["push_1mb_wysiwyg_ms"] = round(float(ma("eval", PUSH)), 1)
+res["type_1mb_source_ms"] = json.loads(ma("eval", TYPE_SOURCE))
+res["push_1mb_source_ms"] = round(float(ma("eval", PUSH)), 1)
 time.sleep(2)
 a, w = rss_total()
 res["rss_7_windows_mb"] = {"app": round(a), "webkit": round(w)}
-res["bundle"] = subprocess.run(["du", "-sh", "/tmp/litemd-e2e/darwin-arm64/LiteMd.app"], capture_output=True, text=True).stdout.split()[0]
+
+# NF4 安装包
+res["app_bundle"] = subprocess.run(["du", "-sh", os.path.dirname(os.path.dirname(os.path.dirname(APP)))], capture_output=True, text=True).stdout.split()[0]
+if len(sys.argv) > 1:
+    res["dmg_mb"] = round(os.path.getsize(sys.argv[1]) / 1e6, 1)
 print(json.dumps(res, ensure_ascii=False, indent=1))
 stop()
+for f in glob.glob(D + "/doc*.md"):
+    os.remove(f)

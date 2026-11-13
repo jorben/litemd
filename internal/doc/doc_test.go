@@ -56,8 +56,14 @@ func TestMixedEOL(t *testing.T) {
 	if c.EOL != CRLF || c.Text != "a\nb\nc\nd\n" {
 		t.Fatalf("got eol=%q text=%q", c.EOL, c.Text)
 	}
-	if string(c.Encode()) != "a\r\nb\r\nc\r\nd\r\n" {
+	// 不编辑：逐字节还原混合换行
+	if string(c.Encode()) != "a\r\nb\r\nc\nd\r\n" {
 		t.Fatalf("encode: %q", c.Encode())
+	}
+	// 改一行保留它原来的换行符；新增的行用主要换行符；其余行不变
+	c.Text = "a\nb\nC2\nnew\nd\n"
+	if string(c.Encode()) != "a\r\nb\r\nC2\nnew\r\nd\r\n" {
+		t.Fatalf("编辑后: %q", c.Encode())
 	}
 	c = Decode([]byte("a\nb\nc\r\n"))
 	if c.EOL != LF {
