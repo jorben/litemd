@@ -135,3 +135,17 @@ html, body { margin: 0; height: 100%; background: var(--bg-color); color: var(--
 .lm-fmtbar button[aria-pressed="true"] { background: var(--accent-bg); color: var(--accent-primary); }
 /* 关闭网络图片时（F6.2）：网络图片显示为可点击的占位 */
 img[src^="http"]:not([data-lm-loaded]) { cursor: pointer; min-width: 48px; min-height: 32px; }
+
+/* 表格宽度（参照原型 .md table）：最宽到正文宽度，单元格内换行；只有不可断开的内容才横向滚动。
+   vmark 默认 width: max-content 让多数表格都成为横向滚动区，WebKit 为每个滚动区分配整块合成层，
+   100 KB 文档的窗口因此多占约 60 MB 图形内存（NF3，v1 性能测量发现）。 */
+.lm-doc .tiptap-editor .table-scroll-wrapper table,
+.lm-export .tiptap-editor table { width: auto; max-width: 100%; }
+.lm-doc .tiptap-editor .table-scroll-wrapper :is(td, th),
+.lm-export .tiptap-editor :is(td, th) { overflow-wrap: anywhere; }
+
+/* 缺失图片（F6.7）：占位下方显示原始路径；内联图片只能在悬停提示中看到 */
+.lm-doc .image-error[data-lm-missing]::after {
+  content: attr(data-lm-missing); display: block; margin-top: 4px;
+  font: 12px var(--font-mono, ui-monospace, monospace); color: var(--text-tertiary); word-break: break-all;
+}

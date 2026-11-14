@@ -95,6 +95,8 @@ export function showMediaError(
   container.classList.remove(config.loadingClass);
   container.classList.add(config.errorClass);
   element.title = `${message}: ${originalSrc}`;
+  // litemd: PRD F6.7 缺失图片要显示原始路径，不只放在悬停提示里（shell.css 用 ::after 显示）
+  if (container !== element) container.dataset.lmMissing = originalSrc;
 }
 
 /**
@@ -105,6 +107,7 @@ export function clearMediaLoadState(
   config: MediaLoadConfig,
 ): void {
   container.classList.remove(config.loadingClass, config.errorClass);
+  delete container.dataset.lmMissing; // litemd: 见 showMediaError
 }
 
 /**

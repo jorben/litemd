@@ -45,6 +45,7 @@ export class WysiwygEditor {
       },
     });
     this.loading = false;
+    performance.mark("lm:tiptap");
     // 基线用编辑器自己的 schema 解析，并把解析出的节点原样放进编辑器（6.2：基线 doc 就是编辑器里的文档）
     this.baseline = loadBaseline(this.schema, "");
     this.load(o.text);
@@ -110,6 +111,7 @@ export class WysiwygEditor {
   /** 重新载入（外部修改、离开源码模式且文本变了）：重建基线，不进撤销历史。 */
   load(text: string): void {
     const base = loadBaseline(this.schema, text);
+    performance.mark("lm:parse");
     this.loading = true;
     try {
       const { state } = this.editor;

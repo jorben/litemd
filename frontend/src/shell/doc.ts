@@ -56,6 +56,7 @@ interface Banner {
 }
 
 export async function docPage(app: HTMLElement): Promise<void> {
+  performance.mark("lm:start"); // 打开耗时分段（docs/perf-report.md）
   const [info, content, view, fsState, initialState] = await Promise.all([
     Session.ready(),
     Session.content(),
@@ -63,6 +64,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     FileState.get().catch(() => ({ mode: "", outline: false, scroll: 0 })),
     Session.state().catch(() => null),
   ]);
+  performance.mark("lm:data");
   realHost.info = info;
   setSettings(view);
   applyLanguage();
@@ -127,6 +129,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
   const sync = new PageSync({ client: Session, getText: () => currentText(), getSize: () => text.length });
   sync.reset(content.seq);
 
+  performance.mark("lm:pre-editor");
   const rich = new WysiwygEditor({
     element: $(".tiptap-editor"),
     text,
@@ -948,7 +951,9 @@ export async function docPage(app: HTMLElement): Promise<void> {
   });
 
   // ---- 启动 ----
+  performance.mark("lm:editor");
   await setMode(mode, true);
+  performance.mark("lm:mode");
   renderBanners();
   renderStatus();
   if (mode === "wysiwyg" && info.untitled) rich.editor.commands.focus();
