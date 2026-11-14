@@ -3,13 +3,15 @@
 //   - 只有用户编辑才通知（5.1）：docChanged 且不在程序载入中；
 //   - 序列化：serializeWithBaseline，推送成功后 commit 更新基线（6.3 第 6 步）。
 import { Editor, type Extensions } from "@tiptap/core";
-import { Fragment, type Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { Fragment, Slice, type Node as PMNode, type Schema } from "@tiptap/pm/model";
+import type { Mappable } from "@tiptap/pm/transform";
 import { VIEW_STATE_META } from "@/plugins/detailsBlock/tiptap";
 import {
   commitBaseline,
   loadBaseline,
   serializeWithBaseline,
   type Baseline,
+  type ViewOpen,
   type WriteResult,
 } from "../fidelity/writeback";
 import { buildExtensions } from "./extensions";
@@ -31,6 +33,12 @@ export class WysiwygEditor {
   private loading = false;
   /** 最近一次序列化的方式；"full" 时外壳显示「本次修改调整了全文格式」（F2.5⑤） */
   lastMode: WriteResult["mode"] = "unchanged";
+  /**
+   * 预览里展开 / 折叠过的折叠块：位置（随之后的编辑映射）、预览给它的 open、原来的 open。
+   * 规范序列化这些块时（粗粒度基线、整篇退回、改写范围包含它们）按原来的 open 输出；
+   * 之后在所见即所得里又切换过（open 不再是预览给的值）就是一次编辑，照常写回。
+   */
+  private viewToggles: Array<{ pos: number; open: boolean; orig: boolean }> = [];
   /** 载入时被插件规范化的顶层块下标（[-1] 表示块数都变了，无法对齐）；技术方案 6.4 节统计用 */
   normalizedOnLoad: number[] = [];
 
@@ -41,7 +49,10 @@ export class WysiwygEditor {
       extensions: o.extensions ?? buildExtensions(),
       editable: o.editable,
       onTransaction: ({ transaction }) => {
-        if (transaction.getMeta(VIEW_STATE_META)) this.adoptViewState(transaction.before, transaction.doc);
+        const viewState = !!transaction.getMeta(VIEW_STATE_META);
+        // 切换只改属性、不移动位置；它的 setNodeMarkup 步骤却把块的起点标为已删除，映射会丢掉记录的原值
+        if (!viewState && transaction.docChanged && this.viewToggles.length) this.mapViewToggles(transaction.mapping);
+        if (viewState) this.adoptViewState(transaction.before, transaction.doc);
         else if (!this.loading && transaction.docChanged && !transaction.getMeta("preventUpdate")) o.onUserEdit?.();
         o.onTransaction?.();
       },
@@ -90,13 +101,64 @@ export class WysiwygEditor {
     if (before.childCount !== after.childCount) return;
     const children: PMNode[] = [];
     let changed = false;
+    let offset = 0;
     base.forEach((node, _, i) => {
       if (i < before.childCount && before.child(i).eq(node) && !after.child(i).eq(node)) {
         children.push(after.child(i));
         changed = true;
+        this.recordViewToggles(before, after, offset, offset + after.child(i).nodeSize);
       } else children.push(node);
+      if (i < after.childCount) offset += after.child(i).nodeSize;
     });
     if (changed) this.baseline = { ...this.baseline, doc: base.copy(Fragment.fromArray(children)) };
+  }
+
+  /** 记下 [from, to) 中 open 被预览改变的折叠块（切换只改属性，before 与 after 位置一一对应）。 */
+  private recordViewToggles(before: PMNode, after: PMNode, from: number, to: number): void {
+    after.nodesBetween(from, to, (node, pos) => {
+      if (node.type.name !== "detailsBlock") return;
+      const prev = before.nodeAt(pos);
+      if (prev?.type !== node.type || prev.attrs.open === node.attrs.open) return;
+      const i = this.viewToggles.findIndex((v) => v.pos === pos);
+      const orig = i >= 0 ? this.viewToggles[i]!.orig : !!prev.attrs.open;
+      if (i >= 0) this.viewToggles.splice(i, 1);
+      if (!!node.attrs.open !== orig) this.viewToggles.push({ pos, open: !!node.attrs.open, orig });
+    });
+  }
+
+  private mapViewToggles(mapping: Mappable): void {
+    this.viewToggles = this.viewToggles.flatMap((v) => {
+      const r = mapping.mapResult(v.pos, 1);
+      return r.deleted ? [] : [{ ...v, pos: r.pos }];
+    });
+  }
+
+  /** doc 里仍保持预览给的 open 的折叠块 → 原来的 open（交给写回层）。 */
+  private viewOpen(doc: PMNode): ViewOpen {
+    const out = new Map<PMNode, boolean>();
+    for (const v of this.viewToggles) {
+      const node = v.pos < doc.content.size ? doc.nodeAt(v.pos) : null;
+      if (node?.type.name === "detailsBlock" && !!node.attrs.open === v.open) out.set(node, v.orig);
+    }
+    return out;
+  }
+
+  /**
+   * 粘贴为纯文本：按字面插入，不当作 HTML 或 Markdown 解释。代码块里原样插入（保留换行）；
+   * 其他位置每行一个段落，连续换行合并——与 ProseMirror 粘贴纯文本剪贴板的做法一致。空字符串不做任何事。
+   */
+  insertPlainText(text: string): void {
+    if (!text) return;
+    const { state } = this.editor;
+    const { selection, schema } = state;
+    if (selection.ranges.length > 1) return;
+    const tr = state.tr;
+    if (selection.$from.parent.type.spec.code) tr.insertText(text.replace(/\r\n?/g, "\n"));
+    else {
+      const paras = text.split(/(?:\r\n?|\n)+/).map((line) => schema.nodes.paragraph!.create(null, line ? schema.text(line) : null));
+      tr.replaceSelection(new Slice(Fragment.fromArray(paras), 1, 1));
+    }
+    this.editor.view.dispatch(tr.scrollIntoView());
   }
 
   /** 预览 ⇄ 所见即所得：只切 editable，不重新解析，撤销历史保留（8.2）。 */
@@ -106,16 +168,18 @@ export class WysiwygEditor {
 
   /** 当前文档的 Markdown（不改基线）。 */
   peek(): WriteResult {
-    return serializeWithBaseline(this.schema, this.baseline, this.contentDoc());
+    const doc = this.contentDoc();
+    return serializeWithBaseline(this.schema, this.baseline, doc, this.viewOpen(doc));
   }
 
   /** 序列化并把结果作为新基线（推送时调用）。 */
   serialize(): string {
     const schema = this.schema;
     const doc = this.contentDoc();
-    const res = serializeWithBaseline(schema, this.baseline, doc);
+    const viewOpen = this.viewOpen(doc);
+    const res = serializeWithBaseline(schema, this.baseline, doc, viewOpen);
     this.lastMode = res.mode;
-    this.baseline = commitBaseline(schema, this.baseline, doc, res);
+    this.baseline = commitBaseline(schema, this.baseline, doc, res, viewOpen);
     return res.text;
   }
 
@@ -133,6 +197,7 @@ export class WysiwygEditor {
   load(text: string): void {
     const base = loadBaseline(this.schema, text);
     performance.mark("lm:parse");
+    this.viewToggles = [];
     this.loading = true;
     try {
       const { state } = this.editor;

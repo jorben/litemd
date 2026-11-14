@@ -15,7 +15,7 @@ import { bindHostSettings } from "@/plugins/shared/hostSettings";
 import { MATH_BLOCK_LANGUAGE } from "@/utils/markdownPipeline/mdastBlockConverters";
 import { applyAppearance, stepFont, watchSystemTheme } from "./theme";
 import { bindFindToVmark, findState, onFind, replaceAllInWysiwyg, replaceCurrentInWysiwyg, setFind, stepFind } from "./find";
-import { commandForKey, Deduper } from "./keys";
+import { commandForKey, Deduper, FIELD_COMMANDS, isTextField } from "./keys";
 import { countWords, sourceHeadings } from "./text";
 import { buildExportHtml } from "./exportHtml";
 import { applyLanguage, t } from "./i18n";
@@ -693,9 +693,19 @@ export async function docPage(app: HTMLElement): Promise<void> {
   };
   for (const n of [1, 2, 3, 4, 5, 6] as const) commands[`heading-${n}`] = () => wys((c) => c.toggleHeading({ level: n }).run());
 
+  /** 焦点 / 按键目标在编辑器之外的文本输入处（查找栏、弹窗里的输入框） */
+  function inTextField(el: EventTarget | null): boolean {
+    return isTextField(el, [rich.editor.view.dom, source?.view.contentDOM]);
+  }
   function runCommand(id: string, _from: string = "key"): void {
     const fn = commands[id];
     if (!fn || !dedupe.shouldRun(id)) return;
+    if (FIELD_COMMANDS.has(id) && inTextField(document.activeElement)) {
+      // 不作用于文档。撤销 / 重做交给输入框自己的撤销栈：菜单里的「撤销」是自定义项，
+      // macOS 上 ⌘Z 由它接走，输入框本身收不到
+      if (id === "undo" || id === "redo") document.execCommand(id);
+      return;
+    }
     void fn();
   }
   function setFontScale(dir: 1 | -1 | 0): void {
@@ -706,8 +716,11 @@ export async function docPage(app: HTMLElement): Promise<void> {
   }
   async function pastePlain(): Promise<void> {
     const t1 = await host.readClipboardText();
-    if (mode === "wysiwyg") rich.editor.chain().focus().insertContent(t1.replace(/</g, "&lt;")).run();
-    else source?.insert(t1);
+    if (!t1) return;
+    if (mode === "wysiwyg") {
+      rich.editor.commands.focus();
+      rich.insertPlainText(t1);
+    } else source?.insert(t1);
   }
   function openLinkCreate(): void {
     if (mode !== "wysiwyg") return;
@@ -861,6 +874,9 @@ export async function docPage(app: HTMLElement): Promise<void> {
       }
       const id = commandForKey(e, isMac);
       if (!id || !commands[id]) return;
+      // 输入框里的格式、粘贴为纯文本等按键交给输入框自己处理；原生菜单随后发来的同一命令由 runCommand 忽略。
+      // 撤销 / 重做由 runCommand 交给输入框的撤销栈，这里仍拦下，避免原生默认行为再撤销一次
+      if (FIELD_COMMANDS.has(id) && id !== "undo" && id !== "redo" && inTextField(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
       runCommand(id);

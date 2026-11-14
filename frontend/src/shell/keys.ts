@@ -72,6 +72,27 @@ export function commandForKey(e: KeyLike, mac: boolean): string | null {
   return null;
 }
 
+/**
+ * 焦点在编辑器之外的文本输入处（查找栏等）时不作用于文档的命令：撤销 / 重做走输入框自己的撤销栈，
+ * 粘贴为纯文本和文字格式命令不执行。全选是原生菜单角色，本来就作用于焦点所在处。
+ */
+export const FIELD_COMMANDS: ReadonlySet<string> = new Set([
+  "undo", "redo", "paste-plain",
+  "paragraph", "heading-1", "heading-2", "heading-3", "heading-4", "heading-5", "heading-6",
+  "bullet-list", "ordered-list", "task-list", "blockquote", "code-block", "table", "math-block", "hr",
+  "bold", "italic", "strike", "inline-code", "clear-format", "link",
+]);
+
+const NON_TEXT_INPUT = new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]);
+
+/** el 是不是编辑器（editors）之外的文本输入处：文本类 input、textarea、编辑器外的 contenteditable。 */
+export function isTextField(el: EventTarget | null, editors: ReadonlyArray<Element | null | undefined>): boolean {
+  if (!(el instanceof Element) || editors.some((r) => r?.contains(el))) return false;
+  if (el instanceof HTMLInputElement) return !NON_TEXT_INPUT.has(el.type);
+  if (el instanceof HTMLTextAreaElement) return true;
+  return el.closest('[contenteditable]:not([contenteditable="false"])') !== null;
+}
+
 /** 同一命令在短时间内的重复触发（键盘 + 原生菜单）只执行一次。 */
 export class Deduper {
   private last = new Map<string, number>();

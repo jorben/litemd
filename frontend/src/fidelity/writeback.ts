@@ -6,7 +6,7 @@
 //      范围之内的块交给 vmark 的规范序列化；
 //   3. 把「改动范围 + 前后各一个单元」重新解析，与同一组节点的规范序列化结果比较结构，
 //      不一致时依次退回：扩大一个单元 → 整篇规范序列化（mode = "full"，页面提示 F2.5⑤）。
-import type { Node as PMNode, Schema } from "@tiptap/pm/model";
+import { Fragment, type Node as PMNode, type Schema } from "@tiptap/pm/model";
 import type { Root } from "mdast";
 import { parseMarkdown, serializeMarkdown } from "@/utils/markdownPipeline";
 import { parseMarkdownToMdast } from "@/utils/markdownPipeline/parser";
@@ -125,9 +125,33 @@ export function loadBaseline(schema: Schema, source: string): Baseline {
   return { source, doc, coarse: false, lead: source.slice(0, units[0]!.from), units };
 }
 
-function canonical(schema: Schema, nodes: PMNode[]): string {
+/**
+ * 预览里展开 / 折叠过的折叠块 → 它原来的 open（键是要序列化的文档里的节点，由 wysiwyg.ts 给出）。
+ * 规范序列化（改写的单元、粗粒度基线、整篇退回）时按原来的值输出：预览里只是查看，不写回（8.2 节）。
+ */
+export type ViewOpen = ReadonlyMap<PMNode, boolean>;
+
+function withOriginalOpen(node: PMNode, viewOpen: ViewOpen): PMNode {
+  let content = node.content;
+  if (node.childCount > 0) {
+    const kids: PMNode[] = [];
+    let changed = false;
+    node.forEach((c) => {
+      const r = withOriginalOpen(c, viewOpen);
+      kids.push(r);
+      if (r !== c) changed = true;
+    });
+    if (changed) content = Fragment.fromArray(kids);
+  }
+  const open = viewOpen.get(node);
+  if (open !== undefined) return node.type.create({ ...node.attrs, open }, content, node.marks);
+  return content === node.content ? node : node.copy(content);
+}
+
+function canonical(schema: Schema, nodes: PMNode[], viewOpen?: ViewOpen): string {
   if (nodes.length === 0) return "";
-  return serializeMarkdown(schema, schema.topNodeType.create(null, nodes)).replace(/^\n+|\n+$/g, "");
+  const list = viewOpen?.size ? nodes.map((n) => withOriginalOpen(n, viewOpen)) : nodes;
+  return serializeMarkdown(schema, schema.topNodeType.create(null, list)).replace(/^\n+|\n+$/g, "");
 }
 
 /**
@@ -159,9 +183,10 @@ function assemble(
   curFrom: number,
   curTo: number,
   insertAfter: number | null,
+  viewOpen: ViewOpen | undefined,
 ): string {
   const { units } = base;
-  const middle = canonical(schema, childrenOf(doc, curFrom, curTo));
+  const middle = canonical(schema, childrenOf(doc, curFrom, curTo), viewOpen);
   let out = base.lead;
   if (insertAfter !== null) {
     // 在第 insertAfter 个单元之后插入（-1 表示文档开头）：新块与前一块之间用一个空行，
@@ -185,14 +210,14 @@ function assemble(
 }
 
 /** 序列化当前文档（技术方案 6.3 节）。 */
-export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNode): WriteResult {
+export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNode, viewOpen?: ViewOpen): WriteResult {
   const nb = base.doc.childCount;
   const nc = doc.childCount;
   if (doc === base.doc || doc.eq(base.doc)) return { text: base.source, mode: "unchanged", units: [0, 0] };
 
   // 0. 原文没有任何块（空白文档、新建文档）：没有可保留的原文，直接规范序列化，以一个换行结尾
   if (nb === 0) {
-    const body = canonical(schema, childrenOf(doc, 0, nc));
+    const body = canonical(schema, childrenOf(doc, 0, nc), viewOpen);
     return { text: body ? body + "\n" : "", mode: "local", units: [0, 0] };
   }
 
@@ -213,7 +238,7 @@ export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNod
     const boundary = units.findIndex((u) => u.first === p);
     if (boundary >= 0 || p === nb) {
       const after = boundary >= 0 ? boundary - 1 : units.length - 1;
-      const text = assemble(schema, base, doc, 0, 0, p, nc - s, after);
+      const text = assemble(schema, base, doc, 0, 0, p, nc - s, after, viewOpen);
       if (verify(schema, base, doc, text, after + 1, after + 1, p, nc - s))
         return { text, mode: "local", units: [after + 1, after + 1], nodes: [p, nc - s] };
       ua = Math.max(0, after);
@@ -236,10 +261,11 @@ export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNod
     const curFrom = baseFrom;
     const curTo = nc - (nb - baseTo);
     if (curTo < curFrom) continue;
-    const text = assemble(schema, base, doc, a, b, curFrom, curTo, null);
+    const text = assemble(schema, base, doc, a, b, curFrom, curTo, null, viewOpen);
     if (verify(schema, base, doc, text, a, b, curFrom, curTo)) return { text, mode, units: [a, b], nodes: [curFrom, curTo] };
   }
-  return { text: serializeMarkdown(schema, doc), mode: "full", units: [0, units.length] };
+  const full = viewOpen?.size ? withOriginalOpen(doc, viewOpen) : doc;
+  return { text: serializeMarkdown(schema, full), mode: "full", units: [0, units.length] };
 }
 
 /**
@@ -282,21 +308,21 @@ function verify(
  * 1 MB 文档重新解析约 1 s，每次推送都做会让输入停顿后卡住（NF2）。结果与新文本逐字节核对，
  * 对不上（或少见的边界情况）时退回重新解析。
  */
-export function commitBaseline(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult): Baseline {
+export function commitBaseline(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult, viewOpen?: ViewOpen): Baseline {
   if (res.mode === "unchanged") return base;
-  const shifted = res.mode === "full" || base.coarse || !res.nodes ? null : shiftUnits(schema, base, doc, res);
+  const shifted = res.mode === "full" || base.coarse || !res.nodes ? null : shiftUnits(schema, base, doc, res, viewOpen);
   if (shifted) return shifted;
   const next = loadBaseline(schema, res.text);
   if (res.mode === "full" || next.doc.childCount !== doc.childCount) return next;
   return { ...next, doc };
 }
 
-function shiftUnits(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult): Baseline | null {
+function shiftUnits(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult, viewOpen?: ViewOpen): Baseline | null {
   const { units } = base;
   const [a, b] = res.units;
   const [curFrom, curTo] = res.nodes!;
   const nodeDelta = doc.childCount - base.doc.childCount;
-  const middle = canonical(schema, childrenOf(doc, curFrom, curTo));
+  const middle = canonical(schema, childrenOf(doc, curFrom, curTo), viewOpen);
   const out: Unit[] = units.slice(0, a).map((u) => ({ ...u }));
   let delta: number;
   if (a === b) {
