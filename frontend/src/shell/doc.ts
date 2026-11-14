@@ -32,6 +32,7 @@ const ICON = {
   source: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>',
   split: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
   swap: '<path d="M7 7h13l-3-3M17 17H4l3 3"/>',
+  outline: '<path d="M4 6h16M9 12h11M9 18h11M4 12h.01M4 18h.01"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
@@ -302,7 +303,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     const seg = MODES.map((m) => {
       const name = { preview: t("预览"), wysiwyg: t("所见即所得"), source: t("源码"), split: t("分屏") }[m];
       const k = isMac ? `⌘${MODES.indexOf(m) + 1}` : `Ctrl+${MODES.indexOf(m) + 1}`;
-      return `<button role="radio" aria-checked="${mode === m}" data-mode="${m}" ${allowed(m) ? "" : "disabled"} title="${name}（${k}）">${svg(ICON[m])}<span>${name}</span></button>`;
+      return `<button role="radio" aria-checked="${mode === m}" data-mode="${m}" ${allowed(m) ? "" : "disabled"} title="${name}（${k}）" aria-label="${name}">${svg(ICON[m])}</button>`;
     }).join("");
     const enc = info.lossy ? `<span class="lm-tag warn">${info.encoding.toUpperCase()} · ${t("只读")}</span>` : readOnly || huge ? `<span class="lm-tag warn">${t("只读")}</span>` : `<span class="lm-sb">UTF-8${info.eol === "\r\n" ? " · CRLF" : ""}</span>`;
     status.innerHTML = `<div class="lm-seg" role="radiogroup" aria-label="${t("查看模式")}">${seg}</div>
@@ -310,7 +311,8 @@ export async function docPage(app: HTMLElement): Promise<void> {
       <span class="lm-gap"></span>
       <span class="lm-sb lm-save ${cls}" role="status"><span class="dot"></span>${label}</span>
       <span class="lm-sb" title="${t("{n} 个字符 · 约 {m} 分钟读完", { n: c.chars.toLocaleString(), m: c.minutes })}">${t("{n} 字", { n: c.words.toLocaleString() })}</span>
-      ${enc}`;
+      ${enc}
+      <button class="lm-icon lm-outline-toggle" data-act="outline" aria-pressed="${outlineOn}" title="${t("大纲")}（${isMac ? "⌘⇧O" : "Ctrl+Shift+O"}）" aria-label="${t("大纲")}">${svg(ICON.outline)}</button>`;
   }
 
   // ---- 提示条（技术方案 8.3） ----
@@ -655,6 +657,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     outline: () => {
       outlineOn = !outlineOn;
       renderOutline();
+      renderStatus();
       reportMenuState();
       saveFileState();
     },

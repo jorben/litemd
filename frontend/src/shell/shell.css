@@ -80,7 +80,16 @@ html, body { margin: 0; height: 100%; background: var(--bg-color); color: var(--
 .lm-seg button { height: 22px; padding: 0 9px; border: 0; border-radius: 5px; background: none; color: var(--text-secondary); font: inherit; display: inline-flex; align-items: center; gap: 5px; cursor: var(--cursor-interactive, default); }
 .lm-seg button[aria-checked="true"] { background: var(--bg-color); color: var(--text-color); font-weight: 600; box-shadow: 0 0 0 .5px var(--border-color), 0 1px 2px rgba(0,0,0,.08); }
 .lm-seg button:disabled { opacity: .4; }
-@media (max-width: 640px) { .lm-seg button span { display: none; } }
+/* 状态栏里的模式切换：平铺在底栏上的图标按钮（无底板），当前模式用图标颜色与浅底表示 */
+.lm-status .lm-seg { padding: 0; gap: 2px; background: none; border-radius: 0; }
+.lm-status .lm-seg button { height: 24px; min-width: 26px; padding: 0 5px; border-radius: 6px; justify-content: center; color: var(--text-tertiary); }
+.lm-status .lm-seg button:hover:not(:disabled) { background: var(--hover-bg, rgba(0,0,0,.06)); color: var(--text-color); }
+/* 底栏其余图标按钮（交换左右、大纲）与模式按钮同一套配色；大纲打开时与当前模式同样用浅底标出 */
+.lm-status .lm-icon { color: var(--text-tertiary); }
+.lm-status .lm-icon:hover, .lm-status .lm-icon[aria-pressed="true"] { background: var(--hover-bg, rgba(0,0,0,.06)); color: var(--text-color); }
+/* 分屏时的「交换左右」紧跟模式按钮：抵消状态栏 10px 间距，只留与模式按钮相同的 2px */
+.lm-status .lm-seg + .lm-icon { margin-left: -8px; }
+.lm-status .lm-seg button[aria-checked="true"] { background: var(--hover-bg, rgba(0,0,0,.06)); color: var(--text-color); font-weight: inherit; box-shadow: none; }
 .lm-gap { flex: 1; }
 .lm-sb { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .lm-save .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
