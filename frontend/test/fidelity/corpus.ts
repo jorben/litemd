@@ -1,11 +1,11 @@
 // 保真度回归语料的读取（testdata/fidelity/，见其中 MANIFEST.md）。
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 export const CORPUS_DIR = resolve(__dirname, "../../../testdata/fidelity");
 
 export interface CorpusFile {
-  /** 相对 testdata/fidelity 的路径 */
+  /** 相对 testdata/fidelity 的路径，统一用 `/` 分隔（各平台一致：写回回归用它做随机种子） */
   name: string;
   /** 按 MdContent 规则归一化后的正文：去掉 BOM，换行统一为 \n（技术方案 3.2 节） */
   text: string;
@@ -26,6 +26,7 @@ export function normalize(raw: string): string {
 
 export function loadCorpus(): CorpusFile[] {
   return walk(CORPUS_DIR, [])
-    .sort()
-    .map((p) => ({ name: relative(CORPUS_DIR, p), text: normalize(readFileSync(p, "utf8")) }));
+    .map((p) => ({ p, name: relative(CORPUS_DIR, p).split(sep).join("/") }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map(({ p, name }) => ({ name, text: normalize(readFileSync(p, "utf8")) }));
 }
