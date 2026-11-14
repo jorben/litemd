@@ -56,10 +56,13 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | turndown、@joplin/turndown-plugin-gfm | 7.2.5 / 1.0.68 | MIT |
 | i18next、zustand、React | 26.7.2 / 5.1.0 / 19.3.1 | MIT |
 | khroma（Mermaid 依赖，包内未声明 license 字段，LICENSE 文件为 MIT） | 2.1.0 | MIT |
-| golang.org/x/text、golang.org/x/net、golang.org/x/crypto、golang.org/x/sys | — | BSD-3-Clause |
+| golang.org/x/text、golang.org/x/net（仅 Windows 版） | 0.43.0 / 0.59.0 | BSD-3-Clause |
+| github.com/ebitengine/purego（mygo 依赖） | 0.11.1 | Apache-2.0 |
+
+链接进应用的 Go 模块以 `go list -deps` 为准；golang.org/x/crypto、golang.org/x/sys 等只被 mygo 构建工具使用，不进应用。
 
 ### elkjs（EPL-2.0）
 
 Mermaid 依赖 [elkjs](https://github.com/kieler/elkjs) 0.12.1 提供 ELK 布局，构建后是按需加载的单独文件（`assets/elk-*.js`），只在图表声明 `layout: elk` 时载入。elkjs 以 EPL-2.0 或 GPL-3.0-or-later 双许可发布，**LiteMd 按 EPL-2.0 使用**，未作修改；源码见 https://github.com/kieler/elkjs 与 https://github.com/eclipse/elk ，许可全文见 https://www.eclipse.org/legal/epl-2.0/ 。
 
-完整的逐包许可清单可用 `pnpm -C frontend licenses list --prod` 生成。
+完整的逐包许可全文见随应用打包的 `frontend/public/THIRD_PARTY_NOTICES.txt`（设置 → 关于 → 开源许可），依赖或本文件变化后用 `make notices` 重新生成。

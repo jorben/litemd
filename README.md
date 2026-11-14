@@ -204,6 +204,7 @@ flags go through `ARGS`, for example `make dev ARGS="-lang en"` or
 | `make generate` | Regenerate `frontend/src/mygo.ts` after changing a Go service |
 | `make golden` | Update the shortcut table and docs after changing menu shortcuts |
 | `make icon` | Regenerate the release, Dev and web icons from `docs/images/icon-source.png` |
+| `make notices` | Regenerate the bundled `frontend/public/THIRD_PARTY_NOTICES.txt` after changing dependencies or `THIRD_PARTY.md` |
 | `make clean` | Remove `build/`, `.mygo/`, `frontend/dist/` and test builds |
 
 Run `make` with no target to list them all.

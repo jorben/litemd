@@ -18,7 +18,7 @@ DEPS := frontend/node_modules/.modules.yaml
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build build-app dmg generate icon \
+.PHONY: help install dev build build-app dmg generate icon notices \
 	test test-go test-web typecheck lint vet fmt fmt-check generate-check check \
 	golden smoke perf clean
 
@@ -51,6 +51,9 @@ generate: ## 修改 Go 服务后，重新生成 frontend/src/mygo.ts
 
 icon: ## 用 docs/images/icon-source.png 重新生成正式版、开发版和网页图标
 	go run -C scripts/make-icon .
+
+notices: $(DEPS) ## 依赖或 THIRD_PARTY.md 变化后，重新生成随应用打包的 frontend/public/THIRD_PARTY_NOTICES.txt
+	node scripts/third-party-notices.mjs
 
 # ── 测试与检查 ───────────────────────────────────────────
 

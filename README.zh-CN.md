@@ -171,6 +171,7 @@ make dev
 | `make generate` | 修改 Go 服务后重新生成 `frontend/src/mygo.ts` |
 | `make golden` | 修改菜单快捷键后更新快捷键表和文档 |
 | `make icon` | 用 `docs/images/icon-source.png` 重新生成正式版、开发版和网页图标 |
+| `make notices` | 依赖或 `THIRD_PARTY.md` 变化后，重新生成随应用打包的 `frontend/public/THIRD_PARTY_NOTICES.txt` |
 | `make clean` | 删除 `build/`、`.mygo/`、`frontend/dist/` 及测试构建 |
 
 不带参数运行 `make` 可列出全部目标。

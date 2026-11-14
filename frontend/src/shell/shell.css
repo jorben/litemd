@@ -220,6 +220,8 @@ html, body, .editor-content, .cm-scroller, .lm-outline nav, .lm-settings .body {
 @keyframes lm-spin { to { transform: rotate(360deg); } }
 .lm-settings .lic { margin-top: 16px; max-width: 460px; text-align: left; font-size: 12px; line-height: 1.6; color: var(--text-secondary); background: var(--set-card); box-shadow: var(--set-card-edge); padding: 10px 14px; border-radius: 10px; user-select: text; }
 .lm-settings .lic[hidden] { display: none; }
+.lm-settings .lic .notices { margin: 8px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 var(--font-mono, ui-monospace, monospace); color: var(--text-secondary); }
+.lm-settings .lic .notices-err { margin-top: 8px; }
 
 @media (prefers-reduced-motion: reduce) {
   .lm-settings *, .lm-settings *::before { transition: none !important; }

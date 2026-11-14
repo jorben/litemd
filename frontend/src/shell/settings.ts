@@ -37,6 +37,9 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
   const boot = { language: view.language, restoreWindow: view.restoreWindow };
   let tab: Tab = "general";
   let licOpen = false;
+  // 第三方许可全文（make notices 生成，随前端打包）。展开时用同源 fetch 读取并内嵌显示：
+  // 窗口只能导航到前端自身且不开新窗口（links.Harden），直接打开文件会离开设置页
+  let notices: { state: "idle" | "loading" | "failed" } | { state: "ready"; text: string } = { state: "idle" };
   let update: Status = { state: "idle", version: "", message: "" };
 
   async function save(patch: Partial<View>): Promise<void> {
@@ -157,10 +160,25 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
           <p class="tagline">${t("一个文件，一个窗口，所见即所得，原文不走样。")}</p>
           <p class="upd" role="status">${ready ? esc(t("LiteMd {v} 已下载", { v: update.version })) : ""}</p>
           <div class="acts">${btn}<button class="lm-btn" data-act="lic" aria-expanded="${licOpen}" aria-controls="lm-lic">${t("开源许可")}</button></div>
-          <div class="lic" id="lm-lic"${licOpen ? "" : " hidden"}>${t("LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、highlight.js、golang.org/x/text（BSD-3-Clause）、elkjs（EPL-2.0）。完整清单见 THIRD_PARTY.md。")}</div>
+          <div class="lic" id="lm-lic"${licOpen ? "" : " hidden"}><p>${t("LiteMd 以 Apache-2.0 许可发布。包含的第三方代码：vmark（ISC）、mygo（MIT）、Tiptap / ProseMirror / CodeMirror / KaTeX / Mermaid / unified（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、highlight.js、golang.org/x/text、golang.org/x/net（BSD-3-Clause）、purego（Apache-2.0）、elkjs（EPL-2.0）。各组件的许可全文如下。")}</p>${
+            !licOpen ? ""
+            : notices.state === "ready" ? `<pre class="notices" tabindex="0" aria-label="THIRD_PARTY_NOTICES.txt">${esc(notices.text)}</pre>`
+            : notices.state === "failed" ? `<p class="notices-err">${t("许可全文载入失败。")}</p>`
+            : ""}</div>
         </div>`;
       }
     }
+  }
+
+  async function loadNotices(): Promise<void> {
+    notices = { state: "loading" };
+    try {
+      const r = await fetch("/THIRD_PARTY_NOTICES.txt");
+      notices = r.ok ? { state: "ready", text: await r.text() } : { state: "failed" };
+    } catch {
+      notices = { state: "failed" };
+    }
+    render();
   }
 
   // 只更新变化的部分（不整块替换 innerHTML），保留键盘焦点、滚动位置和开关的过渡动画
@@ -194,6 +212,7 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
     const act = el.closest<HTMLElement>("[data-act]")?.dataset.act;
     if (act === "lic") {
       licOpen = !licOpen;
+      if (licOpen && (notices.state === "idle" || notices.state === "failed")) void loadNotices();
       render();
     }
     if (act === "update") {
