@@ -70,33 +70,54 @@ export function loadBaseline(schema: Schema, source: string): Baseline {
   }
   const units: Unit[] = [];
   let next = 0;
-  let pendingFirst = -1; // 开头那些拿不到位置的节点，并入下一个单元
   let lastEndLine = 0;
+  // 拿不到位置的顶层节点（如由多个 html 节点拼成的 <details> 块）单独成一个单元，原文范围在循环后
+  // 取前后两个单元之间的非空白文本。曾经把它们并进前一个单元（开头的并进后一个）却不扩大原文范围，
+  // 它们的原文落进 sep 或 lead：改写那个单元时既输出规范文本、又输出 sep 里的原文，块被写两遍
+  const gaps = new Set<Unit>();
   for (const { child, nodes } of sources) {
     if (nodes.length === 0) continue;
     const s = child.position?.start.line;
     const e = child.position?.end.line;
     const prev = units[units.length - 1];
-    if (!Number.isInteger(s) || !Number.isInteger(e) || (s as number) <= lastEndLine) {
-      // 没有位置或与前一单元重叠：与前一个单元合并
-      if (prev) {
-        prev.count += nodes.length;
-        if (Number.isInteger(e) && (e as number) > lastEndLine) {
-          prev.end = lineEnd(e as number);
-          lastEndLine = e as number;
-        }
-      } else if (pendingFirst < 0) pendingFirst = next;
+    if (!Number.isInteger(s) || !Number.isInteger(e)) {
+      if (prev && gaps.has(prev)) prev.count += nodes.length;
+      else {
+        const gap: Unit = { first: next, count: nodes.length, from: 0, end: 0, sep: "" };
+        units.push(gap);
+        gaps.add(gap);
+      }
       next += nodes.length;
       continue;
     }
-    const first = pendingFirst >= 0 ? pendingFirst : next;
-    units.push({ first, count: next + nodes.length - first, from: starts[(s as number) - 1]!, end: lineEnd(e as number), sep: "" });
-    pendingFirst = -1;
+    if ((s as number) <= lastEndLine && prev) {
+      // 与前一单元重叠：合并
+      prev.count += nodes.length;
+      if ((e as number) > lastEndLine) {
+        prev.end = lineEnd(e as number);
+        lastEndLine = e as number;
+      }
+      next += nodes.length;
+      continue;
+    }
+    units.push({ first: next, count: nodes.length, from: starts[(s as number) - 1]!, end: lineEnd(e as number), sep: "" });
     next += nodes.length;
     lastEndLine = e as number;
   }
-  if (units.length === 0 || next !== doc.childCount || pendingFirst >= 0) {
+  if (units.length === 0 || next !== doc.childCount) {
     return { source, doc, coarse: true, ...wholeDocUnit(source, doc) };
+  }
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i]!;
+    if (!gaps.has(u)) continue;
+    const lo = i > 0 ? units[i - 1]!.end : 0;
+    const hi = i + 1 < units.length ? units[i + 1]!.from : source.length;
+    const text = source.slice(lo, hi);
+    const body = text.trim();
+    // 没有对应原文（或前后单元范围异常）：定位不了，整篇当作一个单元
+    if (!body || hi < lo) return { source, doc, coarse: true, ...wholeDocUnit(source, doc) };
+    u.from = lo + text.indexOf(body);
+    u.end = u.from + body.length;
   }
   units.forEach((u, i) => {
     u.sep = source.slice(u.end, i + 1 < units.length ? units[i + 1]!.from : source.length);
@@ -109,8 +130,14 @@ function canonical(schema: Schema, nodes: PMNode[]): string {
   return serializeMarkdown(schema, schema.topNodeType.create(null, nodes)).replace(/^\n+|\n+$/g, "");
 }
 
+/**
+ * 局部校验比较结构时忽略的属性：折叠块的 open 只是展开状态。预览里展开过的块（wysiwyg.ts 的
+ * adoptViewState）与它保留下来的原文在这一点上不同，不能因此判定拼接失败、把它也重新序列化。
+ */
+const VERIFY_IGNORE = { ignoreAttrs: new Set(["open"]) };
+
 function fingerprintOf(schema: Schema, md: string): string {
-  return docFingerprint(parseMarkdown(schema, md));
+  return docFingerprint(parseMarkdown(schema, md), VERIFY_IGNORE);
 }
 
 function childrenOf(doc: PMNode, from: number, to: number): PMNode[] {
@@ -246,7 +273,7 @@ function verify(
   const got = fingerprintOf(schema, segment);
   // 以当前节点本身为准；保留下来的原文块若本就经不起规范往返（如含行内 HTML 的标题），
   // 拿规范序列化做对照会误判，所以只在节点本身对不上时才用它
-  if (got === docFingerprint(schema.topNodeType.create(null, nodes))) return true;
+  if (got === docFingerprint(schema.topNodeType.create(null, nodes), VERIFY_IGNORE)) return true;
   return got === fingerprintOf(schema, canonical(schema, nodes));
 }
 

@@ -3,7 +3,8 @@
 //   - 只有用户编辑才通知（5.1）：docChanged 且不在程序载入中；
 //   - 序列化：serializeWithBaseline，推送成功后 commit 更新基线（6.3 第 6 步）。
 import { Editor, type Extensions } from "@tiptap/core";
-import type { Node as PMNode, Schema } from "@tiptap/pm/model";
+import { Fragment, type Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { VIEW_STATE_META } from "@/plugins/detailsBlock/tiptap";
 import {
   commitBaseline,
   loadBaseline,
@@ -40,7 +41,8 @@ export class WysiwygEditor {
       extensions: o.extensions ?? buildExtensions(),
       editable: o.editable,
       onTransaction: ({ transaction }) => {
-        if (!this.loading && transaction.docChanged && !transaction.getMeta("preventUpdate")) o.onUserEdit?.();
+        if (transaction.getMeta(VIEW_STATE_META)) this.adoptViewState(transaction.before, transaction.doc);
+        else if (!this.loading && transaction.docChanged && !transaction.getMeta("preventUpdate")) o.onUserEdit?.();
         o.onTransaction?.();
       },
     });
@@ -76,6 +78,25 @@ export class WysiwygEditor {
       doc = doc.copy(doc.content.cut(0, doc.content.size - doc.lastChild!.nodeSize));
     }
     return doc;
+  }
+
+  /**
+   * 预览里展开/折叠折叠块（VIEW_STATE_META）：不通知编辑，并把变化同步进基线文档，这样之后
+   * 不论是否有别的编辑，这些块都按原文输出，不会把 open 写进文件。只接收基线里原本未改动的
+   * 顶层块；已经有未推送编辑的块保持原样，随那次编辑一起保存。
+   */
+  private adoptViewState(before: PMNode, after: PMNode): void {
+    const base = this.baseline.doc;
+    if (before.childCount !== after.childCount) return;
+    const children: PMNode[] = [];
+    let changed = false;
+    base.forEach((node, _, i) => {
+      if (i < before.childCount && before.child(i).eq(node) && !after.child(i).eq(node)) {
+        children.push(after.child(i));
+        changed = true;
+      } else children.push(node);
+    });
+    if (changed) this.baseline = { ...this.baseline, doc: base.copy(Fragment.fromArray(children)) };
   }
 
   /** 预览 ⇄ 所见即所得：只切 editable，不重新解析，撤销历史保留（8.2）。 */

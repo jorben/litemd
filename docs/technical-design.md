@@ -527,7 +527,7 @@ interface Baseline {
 - **载入时**：解析原文得到 `doc`，并为每个顶层块确定原文区间：
   - 起点取 mdast 顶层节点的 `position.start.offset`（vmark 管线在块上记录了 `sourceLine`，可直接利用）；
   - 终点取下一个块起点之前最后一个非空白字符所在行的行尾；
-  - mdast 与 ProseMirror 的顶层节点不一定一一对应（vmark 的 `inlineHtmlMerge`、`listInterruptJoin` 会合并节点，`details` 等节点没有位置，见 `positionTrust.ts`）。拿不到可靠起点的块与前一个块合并成一个单元，共享一个区间。
+  - mdast 与 ProseMirror 的顶层节点不一定一一对应（vmark 的 `inlineHtmlMerge`、`listInterruptJoin` 会合并节点，`details` 等节点没有位置，见 `positionTrust.ts`）。位置与前一个块重叠的块与前一个块合并成一个单元，共享一个区间；完全拿不到位置的块（如 `<details>`）单独成一个单元，区间取前后两个单元之间的非空白文本——曾经把它们并进相邻单元却不扩大区间，原文落在分隔空白里，编辑相邻段落时折叠块被写两遍。
 - **基线的 `doc` 必须就是编辑器里的那个文档对象**。载入完成、各插件首轮 `appendTransaction` 跑完之后，如果 `editor.state.doc` 已经不是解析结果（有插件在载入时改了节点），对改动的块记日志；M0 的目标是这种块为 0（第 6.4 节）。
 
 ### 6.3 序列化
@@ -614,7 +614,7 @@ main.tsx
 | 模式 | 实现 | 切换 |
 |---|---|---|
 | 预览 | 与所见即所得**同一个 Tiptap 实例**，装全部扩展，`editable: false`。Tiptap 不能给运行中的实例追加扩展，所以预览不另装一套精简扩展；编辑类界面（浮动格式栏、链接编辑浮层、右键菜单中的编辑项、任务框勾选）在 `editable` 为假时不响应（F3.1、D15）。为此要检查迁入的 `taskToggle`、`formatToolbar`、`linkPopup`、`editorContextMenu` 等是否判断了 `view.editable`，没有的补上 | — |
-| 所见即所得 | 同上，`editable: true` | 与预览之间只切 `editable`，**不重新解析**，撤销历史保留 |
+| 所见即所得 | 同上，`editable: true`。折叠块的展开/折叠：所见即所得里是一次编辑，`open` 照常写回；预览里只是查看，事务带 `lm:viewState` 标记，不通知编辑，并把变化同步进基线文档，之后有别的编辑时这些块仍输出原文（局部校验比较结构时忽略 `open`） | 与预览之间只切 `editable`，**不重新解析**，撤销历史保留 |
 | 源码 | CodeMirror 6 + `@codemirror/lang-markdown`、查找、多光标、自动配对、列表续写 | 进出规则见第 6.3 节。与所见即所得之间切换后，撤销历史从切换时开始（D15）：两种编辑器的历史无法互通 |
 | 分屏 | 左 CodeMirror、右只读 Tiptap。预览按防抖（200 ms，大文档 500 ms）整篇重新解析；按顶层块 key 复用节点，减少 DOM 变动 | 双向同步滚动：用块级“源码行号 ⇄ 预览块”映射（vmark 的 `sourceLineAttr`）。分屏时以 CodeMirror 文本为准，推送不经过保真层 |
 

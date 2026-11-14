@@ -37,6 +37,8 @@ import { sourceLineAttr } from "../shared/sourceLineAttr";
 import "./details-block.css";
 
 const detailsClickPluginKey = new PluginKey("detailsClick");
+/** litemd: 事务只改变查看状态（只读视图里展开/折叠），不是对文档的编辑。 */
+export const VIEW_STATE_META = "lm:viewState";
 const DETAILS_INPUT_PATTERN = /^(?:<details>|:::details)\s*$/i;
 
 declare module "@tiptap/core" {
@@ -214,7 +216,11 @@ export const detailsBlockExtension = Node.create({
                   open: !node.attrs.open,
                 });
                 // Toggle is UI state, not content change - don't add to history
-                view.dispatch(tr.setMeta("addToHistory", false));
+                tr.setMeta("addToHistory", false);
+                // litemd: 只读视图（预览）里展开/折叠只是查看，不算编辑、不写盘；
+                // 由 editor/wysiwyg.ts 同步进基线。编辑模式下仍是一次编辑，照常保存。
+                if (!view.editable) tr.setMeta(VIEW_STATE_META, true);
+                view.dispatch(tr);
                 return true;
               }
             }
