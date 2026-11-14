@@ -129,12 +129,17 @@ func TestWriteFileAtomicKeepsMode(t *testing.T) {
 	if err := os.WriteFile(p, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Windows 只有只读位，0o600 会报成 0o666：与写入前系统报告的权限比较
+	before, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := WriteFileAtomic(p, []byte("new")); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p)
 	fi, _ := os.Stat(p)
-	if string(b) != "new" || fi.Mode().Perm() != 0o600 {
+	if string(b) != "new" || fi.Mode().Perm() != before.Mode().Perm() {
 		t.Fatalf("content=%q mode=%v", b, fi.Mode().Perm())
 	}
 	entries, _ := os.ReadDir(dir)
