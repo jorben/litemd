@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14171e" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="LiteMd，轻量的桌面 Markdown 编辑器。一个文件，一个窗口，支持 macOS、Windows 和 Linux。只改你编辑过的部分。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="LiteMd — 一个文件，一个窗口。">
+  <meta property="og:description" content="轻量便捷的桌面 Markdown 编辑器。打开即读，随手编辑，保留原文。">
+  <meta property="og:url" content="https://jorben.github.io/litemd/">
+  <meta property="og:image" content="https://jorben.github.io/litemd/assets/screenshot.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://jorben.github.io/litemd/">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
+  <title>LiteMd — 一个文件，一个窗口。</title>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">跳到正文</a>
+  <header class="site-header wrap">
+    <a class="brand" href="#" aria-label="LiteMd"><img src="assets/icon.png" width="40" height="40" alt=""><span>LiteMd</span></a>
+    <nav aria-label="主导航" data-i18n-aria="navLabel">
+      <a class="nav-feature" href="#features" data-i18n="navFeatures">功能</a>
+      <a class="github-link" href="https://github.com/jorben/litemd"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.3-4.3-2.2-6-2.7m12 5v-3.4a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18.4 6a4.3 4.3 0 0 0-.1-3.5S17.2 2.2 14.8 4a13 13 0 0 0-6.6 0C5.8 2.2 4.7 2.5 4.7 2.5A4.3 4.3 0 0 0 4.6 6a4.7 4.7 0 0 0-1.3 3.6c0 4.7 2.8 5.7 5.5 6A3 3 0 0 0 8 18v3.3"/></svg><span>GitHub</span></a>
+      <div class="nav-preferences">
+        <button class="language-switch preference-trigger" type="button" hidden aria-label="Switch to English">EN</button>
+        <div class="theme-control" hidden>
+          <button id="theme-toggle" class="preference-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-controls="theme-menu" aria-label="外观主题" data-i18n-aria="themeLabel">
+            <svg data-theme-icon="system" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+            <svg data-theme-icon="light" aria-hidden="true" viewBox="0 0 24 24" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+            <svg data-theme-icon="dark" aria-hidden="true" viewBox="0 0 24 24" hidden><path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/></svg>
+          </button>
+          <div id="theme-menu" class="theme-menu" role="menu" aria-label="外观主题" data-i18n-aria="themeLabel" hidden>
+            <button type="button" data-theme-option="light" role="menuitemradio" aria-checked="false" tabindex="-1"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><span data-i18n="themeLight">浅色</span><svg class="theme-check" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 12 4 4 8-8"/></svg></button>
+            <button type="button" data-theme-option="dark" role="menuitemradio" aria-checked="false" tabindex="-1"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/></svg><span data-i18n="themeDark">深色</span><svg class="theme-check" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 12 4 4 8-8"/></svg></button>
+            <button type="button" data-theme-option="system" role="menuitemradio" aria-checked="true" tabindex="-1"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span data-i18n="themeSystem">跟随系统</span><svg class="theme-check" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 12 4 4 8-8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <a class="nav-download" href="#download" data-i18n="navDownload">下载</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="hero-intro" data-i18n="intro">轻量的桌面 Markdown 编辑器</p>
+        <h1 id="hero-title"><span data-i18n="headline1">一个文件，</span><span data-i18n="headline2">一个窗口。</span></h1>
+        <p class="hero-description" data-i18n="heroDescription">像打开一张图片一样，打开你的 Markdown。<br>轻松阅读，随手编辑，用完即走。</p>
+        <div class="hero-actions"><a class="button button-primary" href="#download"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg><span data-i18n="getApp">免费下载</span></a><a class="text-link" href="#features" data-i18n="explore">认识 LiteMd <span aria-hidden="true">↘</span></a></div>
+        <p class="hero-platforms">macOS <span aria-hidden="true">/</span> Windows <span aria-hidden="true">/</span> Linux</p>
+      </div>
+      <figure class="hero-figure">
+        <img src="assets/screenshot.png" width="2100" height="1484" fetchpriority="high" alt="LiteMd 预览模式的真实截图：独立窗口中显示 Markdown 文档及高亮代码，底部可切换四种模式。" data-i18n-alt="screenshotAlt">
+        <figcaption><span class="status-dot" aria-hidden="true"></span><span data-i18n="screenshotCaption">你的文档，就是主角。</span></figcaption>
+      </figure>
+    </section>
+
+    <div class="facts wrap" aria-label="产品特点" data-i18n-aria="factsLabel">
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7z"/></svg><span data-i18n="factLight">约 7 MB 的 macOS 安装包</span></p>
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4 8 9 8 9s8-5 8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span data-i18n="factPrivate">无需账号，没有遥测</span></p>
+      <p><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 20"/></svg><span data-i18n="factOpen">免费开源，Apache-2.0</span></p>
+    </div>
+
+    <section id="features" class="fidelity section wrap" aria-labelledby="fidelity-title">
+      <div class="section-copy">
+        <p class="section-kicker" data-i18n="fidelityKicker">认真对待你的原文</p>
+        <h2 id="fidelity-title" data-i18n="fidelityTitle">只改你<br>编辑过的部分。</h2>
+        <p data-i18n="fidelityBody">空行、列表符号、表格对齐、换行符，都是文档的一部分。修改一处，保存时只重写那一块，其余原样保留。</p>
+        <p class="quiet-note" data-i18n="fidelityNote">只是打开看看？文件一个字节都不会变。</p>
+        <a class="text-link" href="https://github.com/jorben/litemd/tree/master/testdata/fidelity" data-i18n="fidelityLink">经过 260 多份真实文档的保真回归验证 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="diff-demo" role="img" aria-label="保存示例：只将周五改为周六，列表符号、空行和其他内容保持原样。" data-i18n-aria="diffLabel">
+        <div class="diff-title"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 2H5v20h14V7zm0 0v6h5"/></svg><span>weekend.md</span><span class="diff-saved" data-i18n="saved">已保存</span></div>
+        <div class="diff-lines"><div><span class="line-number">1</span><code># A little weekend plan</code></div><div><span class="line-number">2</span><code>&nbsp;</code></div><div><span class="line-number">3</span><code>* coffee with friends</code></div><div><span class="line-number">4</span><code>* a book, a quiet afternoon</code></div><div><span class="line-number">5</span><code>&nbsp;</code></div><div class="line-removed"><span class="line-number">−</span><code>Let's meet on Friday.</code></div><div class="line-added"><span class="line-number">+</span><code>Let's meet on Saturday.</code></div><div><span class="line-number">7</span><code>&nbsp;</code></div><div><span class="line-number">8</span><code>[café]: https://example.com</code></div></div>
+        <p class="diff-caption"><span class="status-dot" aria-hidden="true"></span><span data-i18n="diffCaption">只写回改动的这一块，其余保持原样。</span></p>
+      </div>
+    </section>
+
+    <section class="views-section section" aria-labelledby="views-title">
+      <div class="wrap">
+        <div class="section-heading"><div><p class="section-kicker" data-i18n="viewsKicker">从阅读到写作</p><h2 id="views-title" data-i18n="viewsTitle">你的 Markdown，<br>四种打开方式。</h2></div><p data-i18n="viewsBody">看一眼文档，改几行文字，或仔细打磨源码。<br>切换方式，阅读位置依然在。</p></div>
+        <div class="view-tabs" role="group" aria-label="查看四种模式的介绍" data-i18n-aria="viewsLabel">
+          <button type="button" class="view-tab" data-view="preview" aria-pressed="true" disabled><span data-i18n="preview">预览</span><kbd>⌘1</kbd></button>
+          <button type="button" class="view-tab" data-view="wysiwyg" aria-pressed="false" disabled><span data-i18n="wysiwyg">所见即所得</span><kbd>⌘2</kbd></button>
+          <button type="button" class="view-tab" data-view="source" aria-pressed="false" disabled><span data-i18n="source">源码</span><kbd>⌘3</kbd></button>
+          <button type="button" class="view-tab" data-view="split" aria-pressed="false" disabled><span data-i18n="split">分屏</span><kbd>⌘4</kbd></button>
+        </div>
+        <div class="view-example" data-mode="preview">
+          <div class="example-title"><span class="file-name">a-small-note.md</span><span class="example-label" data-i18n="exampleLabel">模式示意</span></div>
+          <div class="example-panes"><pre class="example-source" hidden><code><span class="syntax">#</span> Room for a thought
+
+A small file. A little clarity.
+
+<span class="syntax">##</span> Today sounds good
+
+<span class="syntax">- [x]</span> Open a Markdown file
+<span class="syntax">- [x]</span> Make yourself at home
+<span class="syntax">- [ ]</span> Write something worth keeping</code></pre><div class="example-render"><h3>Room for a thought</h3><p>A small file. A little clarity.</p><h4>Today sounds good</h4><ul class="example-checklist"><li class="checked">Open a Markdown file</li><li class="checked">Make yourself at home</li><li>Write something worth keeping</li></ul><span class="demo-caret" aria-hidden="true" hidden></span></div></div>
+          <div class="example-status"><span class="status-dot" aria-hidden="true"></span><span data-i18n="localFile">本地 Markdown 文件</span><span>UTF-8</span></div>
+        </div>
+        <p id="view-description" class="view-description" aria-live="polite">默认以预览打开，专注阅读。按 ⌘E 或双击正文，随时开始编辑。</p>
+        <noscript><p class="quiet-note">LiteMd 支持预览、所见即所得、源码和分屏四种模式。启用 JavaScript 可切换上方的模式示意。</p></noscript>
+      </div>
+    </section>
+
+    <section class="details-section section wrap" aria-labelledby="details-title">
+      <div class="section-heading"><h2 id="details-title" data-i18n="detailsTitle">轻装上阵，<br>该有的都有。</h2><p data-i18n="detailsBody">留给文档多一点空间。<br>把日常需要的细节，安静地做好。</p></div>
+      <div class="detail-grid">
+        <article><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18m-14 4h3m-3 4h7"/></svg><h3 data-i18n="detailWindowTitle">一个文件，一个窗口</h3><p data-i18n="detailWindowBody">双击打开，拖入也行。没有文件树、笔记库或标签页，只有眼前这份文档。</p></article>
+        <article><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg><h3 data-i18n="detailSaveTitle">保存这件事，放心交给它</h3><p data-i18n="detailSaveBody">已有文件自动保存，意外退出后恢复内容。其他程序改了文件？会先问你保留哪一版。</p></article>
+        <article><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12m6-12v12m-12-6h18"/></svg><h3 data-i18n="detailMarkdownTitle">熟悉的 Markdown，都在</h3><p data-i18n="detailMarkdownBody">表格、任务列表、代码高亮、数学公式、Mermaid 图、脚注和 GitHub 提示块。</p></article>
+        <article><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V3m-4 4 4-4 4 4M5 13H3v8h18v-8h-2"/></svg><h3 data-i18n="detailExportTitle">分享，也很简单</h3><p data-i18n="detailExportBody">导出 HTML、PDF，或直接打印。查找替换、文档大纲、深浅主题，也都准备好了。</p></article>
+      </div>
+    </section>
+
+    <section id="download" class="download-section section" aria-labelledby="download-title">
+      <div class="wrap">
+        <div class="download-heading"><img src="assets/icon-large.png" width="88" height="88" loading="lazy" alt=""><h2 id="download-title" data-i18n="downloadTitle">下一份 Markdown，<br>用 LiteMd 打开。</h2><p data-i18n="downloadBody">免费、开源，文件始终属于你。</p><a class="release-link" href="https://github.com/jorben/litemd/releases/latest"><span id="release-version" data-i18n="latestStable">最新稳定版</span><span aria-hidden="true">↗</span></a></div>
+        <div class="download-grid">
+          <article class="download-card"><svg class="platform-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><h3>macOS</h3><p data-i18n="macRequirement">macOS 13 Ventura 及以上</p><a class="download-option" data-asset="mac-arm" href="https://github.com/jorben/litemd/releases/latest"><span>Apple silicon</span><span class="download-format">.dmg <span aria-hidden="true">↓</span></span></a><a class="download-option" data-asset="mac-intel" href="https://github.com/jorben/litemd/releases/latest"><span>Intel</span><span class="download-format">.dmg <span aria-hidden="true">↓</span></span></a><p class="download-note" data-i18n="macNote">已签名并通过 Apple 公证</p></article>
+          <article class="download-card"><svg class="platform-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5 11 4v7H3zm10-1 8-1v8h-8zM3 13h8v7l-8-1zm10 0h8v8l-8-1z"/></svg><h3>Windows</h3><p data-i18n="windowsRequirement">Windows 10 及以上，x64</p><a class="download-option" data-asset="windows" href="https://github.com/jorben/litemd/releases/latest"><span data-i18n="windowsInstaller">下载安装程序</span><span class="download-format">.exe <span aria-hidden="true">↓</span></span></a><p class="download-note" data-i18n="windowsNote">无需管理员权限。首次安装遇到 SmartScreen 提示，选择「更多信息 → 仍要运行」。</p></article>
+          <article class="download-card"><svg class="platform-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m6 9 3 3-3 3m6 0h5"/></svg><h3>Linux</h3><p data-i18n="linuxRequirement">x64 / arm64，尽力支持</p><a class="download-option" href="https://github.com/jorben/litemd/releases/latest"><span data-i18n="linuxPackages">选择安装包</span><span class="download-format">↗</span></a><p class="download-note" data-i18n="linuxNote">提供 .deb、.rpm 和 .tar.gz<br>请按发行版与架构选择。</p></article>
+        </div>
+        <p class="early-note" data-i18n="earlyNote">LiteMd 仍处于早期阶段，重要文档请做好备份或放在版本控制中。</p>
+        <p class="download-help"><a href="https://github.com/jorben/litemd#requirements" data-i18n="installGuide">安装与使用说明</a><a href="https://github.com/jorben/litemd/issues" data-i18n="reportIssue">反馈问题</a><a href="https://github.com/jorben/litemd/releases" data-i18n="allReleases">所有版本</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer wrap"><a class="brand" href="#"><img src="assets/icon.png" width="28" height="28" alt=""><span>LiteMd</span></a><p data-i18n="footerTagline">轻量便捷，用完即走。</p><div><a href="https://github.com/jorben/litemd">GitHub</a><a href="https://github.com/jorben/litemd/blob/master/LICENSE">Apache-2.0</a><a href="https://github.com/jorben">Jorben</a></div></footer>
+</body>
+</html>
