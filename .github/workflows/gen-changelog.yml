@@ -82,7 +82,7 @@ jobs:
 
       - name: Update CHANGELOG (since previous stable tag)
         if: steps.tags.outputs.prev_tag != ''
-        uses: requarks/changelog-action@v1.10.3
+        uses: requarks/changelog-action@b78a3354a01f4a1affb484b9264b506a815c46b1 # v1.10.3
         with:
           token: ${{ github.token }}
           fromTag: ${{ steps.tags.outputs.current_tag }}
@@ -91,14 +91,14 @@ jobs:
 
       - name: Update CHANGELOG (first release)
         if: steps.tags.outputs.prev_tag == ''
-        uses: requarks/changelog-action@v1.10.3
+        uses: requarks/changelog-action@b78a3354a01f4a1affb484b9264b506a815c46b1 # v1.10.3
         with:
           token: ${{ github.token }}
           tag: ${{ steps.tags.outputs.current_tag }}
           changelogFilePath: CHANGELOG.md
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
           token: ${{ secrets.PAT_TOKEN || github.token }}
           commit-message: "docs: 📝 update CHANGELOG.md for ${{ steps.tags.outputs.release_tag }}"
