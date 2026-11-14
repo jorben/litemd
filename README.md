@@ -80,6 +80,8 @@ pnpm -C frontend typecheck && pnpm -C frontend lint
 pnpm -C frontend test       # 单元测试 + 保真回归（testdata/fidelity/）
 ```
 
+这些命令也都配进了 `Makefile`：`make dev`、`make build`、`make test`，提交前运行 `make check`（与 CI 相同的检查），`make help` 列出全部目标。
+
 修改 Go 服务后运行 `go tool mygo generate` 更新 `frontend/src/mygo.ts`；修改菜单快捷键后运行
 `LITEMD_UPDATE_GOLDEN=1 go test ./internal/menu` 更新快捷键表和文档。
 
