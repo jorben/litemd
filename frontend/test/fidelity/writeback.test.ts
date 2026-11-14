@@ -87,6 +87,14 @@ function applyEdit(schema: Schema, doc: PMNode, kind: Kind, r: () => number): { 
   return { tr, top: s.top };
 }
 
+/**
+ * 语义比较忽略的派生属性：编辑后的文档仍带着解析时按原文推导出的值，重新解析输出时会按新内容重新推导。
+ *   id：标题锚点，由标题文字生成（同名标题还要编号），改了标题文字（或另一个同名标题）就会变
+ *   referenceType：引用式链接 / 图片的书写形式。把 [label] 的文字拆开后只能写成 [text][label]，
+ *     shortcut 变 full 是必然的；链接目标仍由 referenceId / href 比较
+ */
+const SEMANTIC_IGNORE = { ignoreAttrs: new Set(["id", "referenceType"]) };
+
 function unitOfTop(base: Baseline, top: number) {
   return base.units.find((u) => top >= u.first && top < u.first + u.count)!;
 }
@@ -142,10 +150,10 @@ describe("V4 保真写回", () => {
         if (r3) local++;
         // 语义：输出重新解析后与编辑后的文档结构相同。以编辑后的文档本身为准；
         // 被改的块经规范序列化本就会变（管线自身的往返差异）时，再以整篇规范序列化的解析结果为准
-        const got = docFingerprint(parseMarkdown(schema, res.text));
+        const got = docFingerprint(parseMarkdown(schema, res.text), SEMANTIC_IGNORE);
         const ok =
-          got === docFingerprint(e.tr.doc) ||
-          got === docFingerprint(parseMarkdown(schema, serializeMarkdown(schema, e.tr.doc)));
+          got === docFingerprint(e.tr.doc, SEMANTIC_IGNORE) ||
+          got === docFingerprint(parseMarkdown(schema, serializeMarkdown(schema, e.tr.doc)), SEMANTIC_IGNORE);
         if (ok) semantic++;
         if (!r3 || !ok) failures.push({ name, kind, mode, local: r3, semantic: ok, unit: [u.from, u.end] });
       }

@@ -30,7 +30,8 @@ export interface FingerprintOptions {
    * Attributes the comparison is not about. The round-trip gates use none: a
    * list's looseness (`spread`) is meaning they must preserve. A gate that
    * compares two producers whose difference in an attribute is decided
-   * downstream of what it judges may leave that attribute out.
+   * downstream of what it judges may leave that attribute out. Applies to
+   * node and mark attributes alike.
    */
   ignoreAttrs?: ReadonlySet<string>;
 }
@@ -46,12 +47,12 @@ function attrsOf(node: PMNode, ignore: ReadonlySet<string> | undefined): string 
   return significant.length ? `{${significant.join(",")}}` : "";
 }
 
-function marksOf(node: PMNode): string {
+function marksOf(node: PMNode, ignore: ReadonlySet<string> | undefined): string {
   if (node.marks.length === 0) return "";
   const marks = node.marks
     .map((m) => {
       const keys = Object.keys(m.attrs ?? {})
-        .filter((k) => m.attrs[k] !== null && m.attrs[k] !== undefined)
+        .filter((k) => !ignore?.has(k) && m.attrs[k] !== null && m.attrs[k] !== undefined)
         .sort()
         .map((k) => `${k}=${JSON.stringify(m.attrs[k])}`);
       return keys.length ? `${m.type.name}{${keys.join(",")}}` : m.type.name;
@@ -71,10 +72,10 @@ export function docFingerprint(doc: PMNode, options: FingerprintOptions = {}): s
   const walk = (node: PMNode, depth: number): void => {
     const indent = "  ".repeat(depth);
     if (node.isText) {
-      parts.push(`${indent}text${marksOf(node)}:${JSON.stringify(node.text ?? "")}`);
+      parts.push(`${indent}text${marksOf(node, options.ignoreAttrs)}:${JSON.stringify(node.text ?? "")}`);
       return;
     }
-    parts.push(`${indent}${node.type.name}${attrsOf(node, options.ignoreAttrs)}${marksOf(node)}`);
+    parts.push(`${indent}${node.type.name}${attrsOf(node, options.ignoreAttrs)}${marksOf(node, options.ignoreAttrs)}`);
     node.forEach((child) => walk(child, depth + 1));
   };
   doc.forEach((child) => walk(child, 0));
