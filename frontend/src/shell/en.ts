@@ -8,6 +8,7 @@ export const EN: Record<string, string> = {
   "切换到所见即所得": "Switch to WYSIWYG",
   // 启动窗口
   "新建": "New", "打开…": "Open…", "也可以把 .md 文件拖到这里": "Or drop a .md file here",
+  "最近打开": "Recent", "清除记录": "Clear", "还没有最近打开的文件": "No recent files",
   // 查找
   "查找": "Find", "查找内容": "Find", "替换": "Replace", "替换为": "Replace with", "全部替换": "Replace All",
   "上一个": "Previous", "下一个": "Next", "区分大小写": "Match Case", "全词匹配": "Whole Word", "正则表达式": "Regular Expression",

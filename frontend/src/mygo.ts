@@ -95,6 +95,15 @@ export interface ReadyInfo {
   size: number;
 }
 
+/** RecentFile 是启动窗口里的一条最近打开记录。 */
+export interface RecentFile {
+  path: string;
+  /** 文件名 */
+  name: string;
+  /** 所在目录，用户目录缩写为 ~ */
+  dir: string;
+}
+
 /** Settings 是全部设置项。 */
 export interface Settings {
   version: number;
@@ -249,6 +258,10 @@ export const Session = {
 
 /** Service 是绑定给启动窗口页面的服务。 */
 export const Start = {
+  /** ClearRecent：清除最近访问记录，与「打开最近 › 清除菜单」相同（同时清掉系统里的最近文稿）。 */
+  clearRecent(): Promise<void> {
+    return call("Start.ClearRecent");
+  },
   /** NewDocument：「新建」按钮。 */
   newDocument(): Promise<void> {
     return call("Start.NewDocument");
@@ -256,6 +269,14 @@ export const Start = {
   /** Open：「打开…」按钮。取消时什么都不做，启动窗口保留（规则③）。 */
   open(): Promise<void> {
     return call("Start.Open");
+  },
+  /** OpenRecent：点击最近打开列表里的一项。 */
+  openRecent(path: string): Promise<void> {
+    return call("Start.OpenRecent", path);
+  },
+  /** Recent：启动窗口下方的最近打开列表，按最近访问时间倒序，最多 MaxRecent 个。 */
+  recent(): Promise<RecentFile[]> {
+    return call("Start.Recent");
   },
 } as const;
 

@@ -276,9 +276,10 @@ func showIfIdle() {
 
 - `pending` 在对应文档窗口出现时（`newDocWindow`）或超时（打开失败时 mygo 只弹错误框，不通知应用）后减一；`cli` 包处理的参数同样计入。
 - 300 ms 是给恢复副本留的时间（读本地小文件，通常远小于此）。即使极端情况下启动窗口先出现，文档窗口一出来它就会被关掉（规则②），只是闪一下。V7 实测这个时间。
-- 启动窗口是同一个前端包里的路由 `/start`，只引入外壳样式，**不加载 Tiptap、CodeMirror**；窗口选项 `Width: 480, Height: 320, DisableResize: true`，`X`、`Y` 为 0 即居中。
+- 启动窗口是同一个前端包里的路由 `/start`，只引入外壳样式，**不加载 Tiptap、CodeMirror**；窗口选项 `Width: 560, Height: 540, DisableResize: true`，`X`、`Y` 为 0 即居中。
 - 两个按钮调用 `Start.newDocument()` → `docs.New()`、`Start.open()` → `docs.OpenDialog()`；这两个方法检查调用者必须是启动窗口。取消打开对话框时什么都不做，启动窗口保留。
 - 拖入文件：`win.OnFileDrop` → 筛出 Markdown 扩展名和 `.txt` → 逐个 `docs.Open(path)`。
+- 最近打开（F1.12⑤、D16）：`Start.recent()` 取 `mygo.App.RecentDocuments()` 的前 5 个（mygo 在打开、保存时把文件移到最前，已不存在的文件不返回；用户目录缩写为 `~`）；`Start.openRecent(path)` 只接受当前列出的路径，再 `docs.Open`；`Start.clearRecent()` 调 `mygo.App.ClearRecentDocuments()`，与菜单「清除菜单」相同。页面在加载和窗口获得焦点时刷新列表。
 - 启动窗口里的 ⌘N / ⌘O 走菜单的 `RoleNew` / `RoleOpen`，与按钮效果相同。
 - **关闭启动窗口**：`newDocWindow` 在文档窗口**创建之后**调用 `start.Close()`，因此 Windows/Linux 上不会出现瞬间“没有窗口”而触发退出。不能放在 `App.OnWindowCreated` 里做：那个事件在 mygo 把窗口登记到文档之前触发，`docs.ForWindow(w)` 还是 `nil`。`start.Close()` 先隐藏启动窗口，`CloseDelay`（1 秒）后再真正关闭：拖入文件时文档窗口是在页面 drop 事件中打开的，立刻销毁启动窗口的 WKWebView 会让 WebKit 的拖放回调访问已销毁的页面而崩溃（macOS 27 实测，应用 exit(2) 退出）。
 - 用户关闭启动窗口：macOS 应用留在 Dock（mygo 已为文档应用把 `OnWindowAllClosed` 设为空操作）；Windows/Linux 上没有其他窗口时由 mygo 默认行为退出。
@@ -300,7 +301,7 @@ func showIfIdle() {
 | `Session` | `saveAsUTF8()` | 非 UTF-8 文档另存为 UTF-8（第 3.2 节） |
 | `Session` | `setFileState(state)` | 按文件保存查看模式、大纲开关、滚动位置 |
 | `Session` | `setMenuState(state)` | 当前模式下哪些菜单命令可用，Go 据此置灰 |
-| `Start` | `newDocument()` `open()` | 只供启动窗口调用（第 3.3.1 节）；其他窗口调用时拒绝 |
+| `Start` | `newDocument()` `open()` `recent()` `openRecent(path)` `clearRecent()` | 只供启动窗口调用（第 3.3.1 节）；其他窗口调用时拒绝 |
 | `Assets` | `saveImage(bytes, mime, suggestedName)` → 相对路径 | F6.3：按设置的规则存到文档目录（默认 `./assets/`，D4），文件名冲突时加序号，大小上限 50 MB，只接受图片 MIME 类型。未命名文档返回 `ErrNeedSave`（F6.4：提示先保存） |
 | `Assets` | `importDropped(paths)` → 相对路径列表 | F6.3/F6.5：**只接受本窗口最近一次 `OnFileDrop` 登记过的路径**（第 7 节）；图片复制到 assets 目录，非图片只计算相对路径，不复制 |
 | `Assets` | `fetchImage(url)` → 图片字节 | F6.2：关闭“加载网络图片”后，用户点击单张图片时由 Go 下载（第 3.5 节） |

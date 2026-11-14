@@ -8,6 +8,7 @@ package start
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -112,8 +113,8 @@ func Show() {
 	w := mygo.NewWindow(mygo.WindowOptions{
 		Title:           "LiteMd",
 		URL:             "/#/start",
-		Width:           480,
-		Height:          320,
+		Width:           560,
+		Height:          540, // 下方有最近打开列表（最多 MaxRecent 项）
 		DisableResize:   true,
 		DisableMaximize: true,
 		BackgroundColor: "light-dark(#ffffff, #1e1e1e)",
@@ -204,4 +205,80 @@ func (Service) Open(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+// MaxRecent 是启动窗口列出的最近文件数（F1.12⑤）。
+const MaxRecent = 5
+
+// RecentFile 是启动窗口里的一条最近打开记录。
+type RecentFile struct {
+	Path string `json:"path"`
+	Name string `json:"name"` // 文件名
+	Dir  string `json:"dir"`  // 所在目录，用户目录缩写为 ~
+}
+
+// recentPaths 和 homeDir 可在测试里替换。
+var (
+	recentPaths = func() []string { return mygo.App.RecentDocuments() }
+	homeDir     = os.UserHomeDir
+)
+
+// recentFiles 按最近访问时间倒序取前 MaxRecent 个。数据与「打开最近」菜单同源：mygo 在打开、保存时把
+// 文件移到最前，已不存在的文件不列出。
+func recentFiles() []RecentFile {
+	home, _ := homeDir()
+	out := []RecentFile{}
+	for _, p := range recentPaths() {
+		if len(out) == MaxRecent {
+			break
+		}
+		dir := filepath.Dir(p)
+		if home != "" {
+			if rel, err := filepath.Rel(home, dir); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				dir = filepath.Join("~", rel)
+			}
+		}
+		out = append(out, RecentFile{Path: p, Name: filepath.Base(p), Dir: dir})
+	}
+	return out
+}
+
+// ErrNotRecent：OpenRecent 只打开启动窗口列出的文件，页面不能借它打开任意路径。
+var ErrNotRecent = errors.New("start: 不在最近打开列表里")
+
+func isRecent(path string) bool {
+	for _, f := range recentFiles() {
+		if f.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+// Recent：启动窗口下方的最近打开列表，按最近访问时间倒序，最多 MaxRecent 个。
+func (Service) Recent(ctx context.Context) ([]RecentFile, error) {
+	if err := check(ctx); err != nil {
+		return nil, err
+	}
+	return recentFiles(), nil
+}
+
+// OpenRecent：点击最近打开列表里的一项。
+func (Service) OpenRecent(ctx context.Context, path string) error {
+	if err := check(ctx); err != nil {
+		return err
+	}
+	if !isRecent(path) {
+		return ErrNotRecent
+	}
+	_, err := docs.Open(path)
+	return err
+}
+
+// ClearRecent：清除最近访问记录，与「打开最近 › 清除菜单」相同（同时清掉系统里的最近文稿）。
+func (Service) ClearRecent(ctx context.Context) error {
+	if err := check(ctx); err != nil {
+		return err
+	}
+	return mygo.App.ClearRecentDocuments()
 }
