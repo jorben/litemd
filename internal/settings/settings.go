@@ -166,6 +166,13 @@ func Load() {
 		return
 	}
 	Default = Open(dir)
+	applyTheme(Default.Get())
+}
+
+// applyTheme 让原生外观（标题栏、菜单、对话框）与页面主题一致：主题选了浅色或深色时，
+// 系统外观与之相反也不会出现浅色标题栏配深色页面。启动前调用时由 App.Run 生效。
+func applyTheme(s Settings) {
+	mygo.Theme.SetSource(mygo.ThemeSource(s.Theme))
 }
 
 // AutosaveMode 返回传给 NewDocuments 的自动保存模式。
@@ -202,6 +209,7 @@ func (Service) Get(context.Context) View { return view() }
 // Set 保存设置，并广播给所有窗口。
 func (Service) Set(_ context.Context, s Settings) (View, error) {
 	saved, err := Default.Set(s)
+	applyTheme(saved)
 	OnChange(saved)
 	v := view()
 	_ = Changed.Broadcast(v)
