@@ -67,24 +67,65 @@ const languageButton = document.querySelector(".language-switch");
 const viewDescription = document.querySelector("#view-description");
 const viewButtons = [...document.querySelectorAll("[data-view]")];
 const viewCopy = { preview: "viewPreview", wysiwyg: "viewWysiwyg", source: "viewSource", split: "viewSplit" };
-const themeSelect = document.querySelector("#theme-select");
+const themeControl = document.querySelector(".theme-control");
+const themeToggle = document.querySelector("#theme-toggle");
+const themeMenu = document.querySelector("#theme-menu");
+const themeOptions = [...document.querySelectorAll("[data-theme-option]")];
 const systemTheme = matchMedia("(prefers-color-scheme: dark)");
 const themeNames = { system: "themeSystem", light: "themeLight", dark: "themeDark" };
 let themePreference = document.documentElement.dataset.theme || "system";
 
 function applyTheme() {
   document.documentElement.dataset.theme = themePreference;
-  themeSelect.value = themePreference;
-  document.querySelector(".theme-control").title = `${translations[language].themeLabel}: ${translations[language][themeNames[themePreference]]}`;
+  const label = `${translations[language].themeLabel}: ${translations[language][themeNames[themePreference]]}`;
+  themeToggle.title = label;
+  themeToggle.setAttribute("aria-label", label);
+  for (const option of themeOptions) option.setAttribute("aria-checked", String(option.dataset.themeOption === themePreference));
   for (const icon of document.querySelectorAll("[data-theme-icon]")) icon.toggleAttribute("hidden", icon.dataset.themeIcon !== themePreference);
   const background = getComputedStyle(document.documentElement).backgroundColor;
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = background;
 }
 
-themeSelect.addEventListener("change", () => {
-  themePreference = themeSelect.value;
+function setThemeMenu(open, focus = false) {
+  themeMenu.hidden = !open;
+  themeToggle.setAttribute("aria-expanded", String(open));
+  if (focus) {
+    if (open) themeOptions.find((option) => option.dataset.themeOption === themePreference).focus();
+    else themeToggle.focus();
+  }
+}
+
+themeToggle.addEventListener("click", () => setThemeMenu(themeMenu.hidden, true));
+themeToggle.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    setThemeMenu(true, true);
+  }
+});
+for (const option of themeOptions) option.addEventListener("click", () => {
+  themePreference = option.dataset.themeOption;
   applyTheme();
+  setThemeMenu(false, true);
   try { localStorage.setItem("litemd-theme", themePreference); } catch { /* The current page still respects the selection. */ }
+});
+themeMenu.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" || event.key === "Tab") {
+    setThemeMenu(false, true);
+    if (event.key === "Escape" || event.shiftKey) event.preventDefault();
+    return;
+  }
+  const index = themeOptions.indexOf(document.activeElement);
+  const next = { ArrowDown: (index + 1) % themeOptions.length, ArrowUp: (index + themeOptions.length - 1) % themeOptions.length, Home: 0, End: themeOptions.length - 1 }[event.key];
+  if (next !== undefined) {
+    event.preventDefault();
+    themeOptions[next].focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!themeControl.contains(event.target)) setThemeMenu(false);
+});
+themeControl.addEventListener("focusout", (event) => {
+  if (!themeControl.contains(event.relatedTarget)) setThemeMenu(false);
 });
 systemTheme.addEventListener("change", applyTheme);
 window.addEventListener("storage", (event) => {
@@ -92,7 +133,7 @@ window.addEventListener("storage", (event) => {
   themePreference = Object.hasOwn(themeNames, event.newValue) ? event.newValue : "system";
   applyTheme();
 });
-document.querySelector(".theme-control").hidden = false;
+themeControl.hidden = false;
 
 function showView(view) {
   selectedView = view;
@@ -117,7 +158,9 @@ function setLanguage(nextLanguage) {
   for (const node of altNodes) node.alt = copy[node.dataset.i18nAlt];
   for (const node of ariaNodes) node.setAttribute("aria-label", copy[node.dataset.i18nAria]);
   languageButton.textContent = language === "zh" ? "EN" : "中文";
-  languageButton.setAttribute("aria-label", language === "zh" ? "Switch to English" : "切换为简体中文");
+  const languageLabel = language === "zh" ? "Switch to English" : "切换为简体中文";
+  languageButton.setAttribute("aria-label", languageLabel);
+  languageButton.title = languageLabel;
   document.querySelector('[data-i18n="installGuide"]').href = language === "zh"
     ? "https://github.com/jorben/litemd/blob/master/README.zh-CN.md#快速开始"
     : "https://github.com/jorben/litemd#getting-started";

@@ -59,15 +59,22 @@ h3 { font-weight: 600; }
 .site-header nav > a:hover, .site-footer a:hover { color: var(--blue); }
 .github-link { gap: 7px; }
 .github-link svg { width: 18px; height: 18px; }
-.nav-preferences { display: flex; align-items: center; gap: 8px; }
-.language-switch { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); min-width: 44px; min-height: 44px; padding: 0 9px; font-size: 12px; font-weight: 600; }
-.language-switch:hover { border-color: var(--blue); color: var(--blue); }
-.theme-control { display: flex; align-items: center; position: relative; color: var(--muted); border-radius: 8px; }
-.theme-control > svg { position: absolute; left: 12px; width: 17px; height: 17px; pointer-events: none; }
-.theme-control > .select-chevron { left: auto; right: 8px; width: 16px; height: 16px; }
-.theme-control select { appearance: none; width: 140px; min-height: 44px; padding: 0 28px 0 38px; border: 1px solid var(--line); border-radius: inherit; background: var(--surface); color: var(--ink); font-size: 12px; }
-.theme-control select:hover { border-color: var(--blue); }
-.theme-control option { color: var(--ink); background: var(--surface); font-size: 14px; }
+.nav-preferences { display: flex; align-items: center; gap: 2px; }
+.preference-trigger { display: inline-flex; align-items: center; justify-content: center; position: relative; isolation: isolate; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+.preference-trigger::before { content: ""; position: absolute; inset: 6px; z-index: -1; border-radius: 6px; background: var(--control); opacity: 0; }
+.preference-trigger:hover, .preference-trigger[aria-expanded="true"] { color: var(--ink); }
+.preference-trigger:hover::before, .preference-trigger[aria-expanded="true"]::before { opacity: 1; }
+.language-switch { font-size: 12px; font-weight: 500; }
+.preference-trigger > svg { width: 17px; height: 17px; }
+.theme-control { position: relative; }
+.theme-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 10; width: 168px; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px var(--shadow); }
+.theme-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 10px; background: transparent; border: 0; border-radius: 6px; color: var(--muted); text-align: left; font-size: 13px; }
+.theme-menu button:hover, .theme-menu button:focus-visible { background: var(--code); color: var(--ink); }
+.theme-menu button:focus-visible { outline-offset: -2px; }
+.theme-menu button[aria-checked="true"] { color: var(--blue); }
+.theme-menu svg { width: 16px; height: 16px; }
+.theme-menu .theme-check { margin-left: auto; opacity: 0; }
+.theme-menu [aria-checked="true"] .theme-check { opacity: 1; }
 .site-header nav > .nav-download { min-height: 44px; padding: 0 18px; border-radius: 8px; background: var(--ink); color: var(--paper); }
 .site-header nav > .nav-download:hover { background: var(--action); color: var(--action-ink); }
 .hero { display: grid; grid-template-columns: .87fr 1.35fr; align-items: center; gap: 24px; padding-block: 68px 60px; }
@@ -185,9 +192,6 @@ kbd { font-family: inherit; font-size: 12px; }
   .brand { font-size: 20px; }
   .brand img { width: 34px; }
   .site-header .nav-feature { display: none; }
-  .theme-control select { width: 44px; padding: 0; color: transparent; }
-  .theme-control .select-chevron { display: none; }
-  .theme-control > svg { left: 14px; width: 16px; height: 16px; }
   .hero { grid-template-columns: 1fr; text-align: center; padding-block: 40px 38px; gap: 26px; }
   .hero-intro { margin-bottom: 16px; }
   h1 { font-size: clamp(44px, 9vw, 64px); }
@@ -234,5 +238,8 @@ kbd { font-family: inherit; font-size: 12px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
-  .button-primary, .download-option, .nav-download, .view-tab, .language-switch, .theme-control select { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+  .button-primary, .download-option, .nav-download, .view-tab, .preference-trigger, .theme-menu button { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+  .preference-trigger::before { transition: opacity 140ms ease; }
+  .theme-menu:not([hidden]) { animation: theme-menu-enter 120ms ease-out; }
+  @keyframes theme-menu-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 }
