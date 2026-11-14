@@ -3,7 +3,8 @@
 #      这个版本的更新说明，在 vX.Y.Z 上建一个草稿 prerelease；
 #   2. build：三个平台同时构建。macOS 用 Developer ID 签名并公证（F11.1），Windows 安装包不做代码签名（D6）；
 #      更新包用 MYGO_UPDATER_PRIVATE_KEY 签名（F11.4），连同安装包一起由 mygo build -upload 上传到草稿；
-#   3. publish：所有平台都成功后，把草稿发布为 prerelease。
+#      macOS 再用 scripts/make-dmg.sh 重打带安装背景的 DMG（mygo 不支持 DMG 背景），签名公证后覆盖草稿里的 DMG；
+#   3. publish：所有平台都成功后，改正 SHA256SUMS 里 DMG 的校验和，再把草稿发布为 prerelease。
 # prerelease 永远不会成为 latest，已安装的应用不会更新到它。验证没问题后手动转正：
 #   gh release edit vX.Y.Z --prerelease=false --latest
 # 转正后它就是 latest，应用会从 releases/latest/download/ 读到更新清单。
@@ -289,6 +290,20 @@ jobs:
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform "${{ matrix.platform }}" -upload
 
+      # mygo 打的 DMG 没有背景。它在打 DMG 时公证，并把票据钉到 build/darwin-*/LiteMd.app 上，
+      # 这里用这个 .app 重打带安装背景的 DMG，签名、公证（沿用上一步导入的 MACOS_SIGNING_IDENTITY 与 NOTARY_KEYCHAIN）
+      # 后同名覆盖草稿里的 DMG。SHA256SUMS 里 DMG 的行此时还是 mygo 那份的，由 publish 作业改正。
+      - name: Restyle and replace the disk images
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          sh scripts/make-dmg.sh
+          gh release upload "$TAG" build/darwin-*/*.dmg --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: Remove signing material
         if: always() && runner.os == 'macOS'
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
@@ -300,6 +315,31 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      # build 作业用带背景的 DMG 覆盖了 mygo 上传的那份，SHA256SUMS 里还是旧 DMG 的校验和。
+      # 放在所有平台都上传完之后改：每个平台的 mygo 上传时都会下载、合并、重传 SHA256SUMS，提前改会被覆盖。
+      - name: Update the checksums of the disk images
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/checksums"
+          mkdir -p "$dir" && cd "$dir"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --pattern '*.dmg'
+          for dmg in *.dmg; do
+            sum=$(sha256sum "$dmg" | cut -d ' ' -f 1)
+            # mygo 的格式是 "<64 位十六进制>  <文件名>"，文件名从第 67 个字符开始
+            awk -v name="$dmg" -v sum="$sum" '
+              substr($0, 67) == name { print sum "  " name; found = 1; next }
+              { print }
+              END { exit !found }
+            ' SHA256SUMS > SHA256SUMS.new || { echo "::error::$dmg is not listed in SHA256SUMS"; exit 1; }
+            mv SHA256SUMS.new SHA256SUMS
+          done
+          sha256sum -c --ignore-missing SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: Publish the draft as a prerelease
         env:
           GH_TOKEN: ${{ github.token }}

@@ -18,7 +18,7 @@ DEPS := frontend/node_modules/.modules.yaml
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build build-app generate icon \
+.PHONY: help install dev build build-app dmg generate icon \
 	test test-go test-web typecheck lint vet fmt fmt-check generate-check check \
 	golden smoke perf clean
 
@@ -36,8 +36,12 @@ install: $(DEPS) ## 安装前端依赖（锁文件有变化时才重新安装）
 dev: $(DEPS) ## 开发：启动 Vite 和开发版 LiteMd Dev（带 Dev 徽章图标），改代码自动重建
 	$(MYGO) dev $(ARGS)
 
-build: $(DEPS) ## 打包正式版到 build/：.app 与 DMG（本机为 ad-hoc 签名）
+build: $(DEPS) ## 打包正式版到 build/：.app 与带安装背景的 DMG（本机为 ad-hoc 签名）
 	$(MYGO) build $(ARGS)
+	sh scripts/make-dmg.sh
+
+dmg: ## 把 build/ 里 mygo 打出的 DMG 换成带安装背景的版本（make build 已包含；首次自动装 dmgbuild）
+	sh scripts/make-dmg.sh
 
 build-app: $(DEPS) ## 只打包 .app，跳过 DMG（更快）
 	$(MYGO) build -skip-dmg $(ARGS)
