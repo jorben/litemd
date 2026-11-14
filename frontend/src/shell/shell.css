@@ -3,6 +3,8 @@
    启动时不再闪灰底。applyAppearance 写在 :root 行内样式上的值优先。 */
 :root { color-scheme: light dark; --bg-color: light-dark(#ffffff, #1e1e1e); --text-color: light-dark(#1a1a1a, #d6d9de); }
 html, body { margin: 0; height: 100%; background: var(--bg-color); color: var(--text-color); }
+/* 滚到顶/底时不要弹簧回弹（macOS 的橡皮筋效果）：根元素与各垂直滚动容器都关掉 */
+html, body, .editor-content, .cm-scroller, .lm-outline nav, .lm-settings .body { overscroll-behavior: none; }
 #app { height: 100%; }
 .lm-i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .lm-icon { height: 24px; min-width: 26px; padding: 0 5px; border: 0; border-radius: 6px; background: none; color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: var(--cursor-interactive, default); font: inherit; }
