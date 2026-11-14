@@ -24,12 +24,29 @@ type Docs = mygo.Documents[doc.MdContent]
 type Document = mygo.Document[doc.MdContent]
 
 // FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。
+// Force：竞态冲突中用户在关窗或退出对话框里选了「保留我的版本」，页面即使暂停推送也要推送（5.4 节）。
 type FlushRequest struct {
-	N int64 `json:"n"`
+	N     int64 `json:"n"`
+	Force bool  `json:"force,omitempty"`
 }
 
 // Flush 事件：页面收到后立即推送未同步的编辑，再调用 Session.flushed(n)。
 var Flush = mygo.NewEvent[FlushRequest]("flush")
+
+// ConflictResolution 是 Go 侧结束竞态冲突暂停的结果（技术方案 5.4 节）。
+// Choice：keep 是「保留我的版本」，页面恢复推送；disk 是「载入磁盘版本」或菜单「还原」，页面丢弃本地编辑并重新取正文。
+type ConflictResolution struct {
+	Choice string `json:"choice"`
+}
+
+// ConflictResolution.Choice 的取值。
+const (
+	ConflictKeep = "keep"
+	ConflictDisk = "disk"
+)
+
+// ConflictResolved 事件：Go 侧（关窗、退出对话框或菜单「还原」）结束了竞态冲突的暂停。页面自己的提示条按钮不触发它。
+var ConflictResolved = mygo.NewEvent[ConflictResolution]("conflict-resolved")
 
 // ErrNoDocument：调用者窗口没有对应的文档（例如启动窗口、设置窗口）。
 var ErrNoDocument = errors.New("session: 调用者窗口没有文档")
@@ -42,13 +59,15 @@ type entry struct {
 	recovered bool
 	stateMu   sync.Mutex
 	pageState any         // 页面通过 setMenuState 报告的状态（menu.PageState），菜单据此置灰
-	closeOK   atomic.Bool // 已收齐，下一次关窗放行给 mygo
+	closeOK   atomic.Bool // 已收齐（或已选定版本），下一次关窗放行给 mygo
+	asking    atomic.Bool // 正在弹竞态冲突对话框（hold.go）
 }
 
 var (
-	mu       sync.Mutex
-	byWindow = map[*mygo.Window]*entry{}
-	quitting atomic.Bool // 退出流程已放行：关窗不再拦截（拦截会取消整个退出）
+	mu         sync.Mutex
+	byWindow   = map[*mygo.Window]*entry{}
+	quitting   atomic.Bool // 退出流程已放行：关窗不再拦截（拦截会取消整个退出）
+	quitAsking atomic.Bool // 退出前正在逐个询问竞态冲突的窗口
 )
 
 var debugEnabled = os.Getenv("LITEMD_DEBUG") != ""
@@ -67,16 +86,30 @@ func Attach(w *mygo.Window, d *Document, recovered bool) {
 	byWindow[w] = e
 	mu.Unlock()
 	w.OnClose(func(ev *mygo.CloseEvent) {
-		if quitting.Load() || e.closeOK.Swap(false) || !e.sync.NeedsFlush() {
+		q := quitting.Load()
+		switch closeActionFor(q, !q && e.closeOK.Swap(false), e.sync) {
+		case closeAllow:
 			return
+		case closeAskHeld:
+			ev.PreventDefault() // 竞态冲突：先问保留哪个版本，选定后再关一次；取消则不关
+			if e.asking.Load() {
+				return
+			}
+			go func() {
+				if askAndResolveHeld(w, e) {
+					e.closeOK.Store(true)
+					w.Close()
+				}
+			}()
+		case closeFlush:
+			ev.PreventDefault() // mygo 看到已阻止就不处理；收齐后再关一次
+			debugf("close: flushing window %d", w.ID())
+			go func() {
+				FlushWindow(w)
+				e.closeOK.Store(true)
+				w.Close()
+			}()
 		}
-		ev.PreventDefault() // mygo 看到已阻止就不处理；收齐后再关一次
-		debugf("close: flushing window %d", w.ID())
-		go func() {
-			FlushWindow(w)
-			e.closeOK.Store(true)
-			w.Close()
-		}()
 	})
 	w.OnClosed(func() {
 		mu.Lock()
@@ -89,8 +122,9 @@ func Attach(w *mygo.Window, d *Document, recovered bool) {
 	d.OnReload(func() { e.sync.Reset(e.sync.Seq()) })
 	// markDirty 的 SetEdited(true) 会启动自动保存计时；若页面推送晚于计时，自动保存写的是上一版内容并把
 	// 文档标回「未编辑」。此时页面仍有未推送的编辑：重新标记已编辑，并立即请求收齐（M0 报告 V2）。
+	// 竞态冲突暂停中页面不推送，不重新标记（hold.go）。
 	d.OnStateChange(func(st mygo.DocumentState) {
-		if !st.Edited && e.sync.NeedsFlush() && !d.Content().Lossy {
+		if shouldRemark(st.Edited, d.Content().Lossy, e.sync) {
 			debugf("state: unedited with unpushed edits, re-marking window %d", w.ID())
 			d.SetEdited(true)
 			go FlushWindow(w)
@@ -161,25 +195,54 @@ func FlushWindow(w *mygo.Window) bool {
 }
 
 // InstallQuitFlush 必须在 mygo.NewDocuments 之前调用，使收齐排在 mygo 的退出处理前面（技术方案 5.3 节）。
+// 竞态冲突暂停中的窗口在这里逐个问保留哪个版本（在 mygo 关窗之前；退出中的关窗不能阻止），任一取消就取消退出。
 func InstallQuitFlush() {
 	mygo.App.OnBeforeQuit(func(ev *mygo.QuitEvent) {
 		if ev.SessionEnding {
 			quitting.Store(true) // 关机、注销：不能等待，只能依赖最近一次推送
 			return
 		}
+		type heldWindow struct {
+			w *mygo.Window
+			e *entry
+		}
+		var held []heldWindow
 		var pending []*mygo.Window
 		mu.Lock()
 		for w, e := range byWindow {
-			if e.sync.NeedsFlush() {
+			if e.sync.Held() {
+				held = append(held, heldWindow{w, e})
+			} else if e.sync.NeedsFlush() {
 				pending = append(pending, w)
 			}
 		}
 		mu.Unlock()
-		if len(pending) == 0 {
+		if len(held) == 0 && len(pending) == 0 {
 			quitting.Store(true)
 			return
 		}
-		ev.PreventDefault()
+		ev.PreventDefault() // mygo 随即触发 OnQuitCanceled，quitting 保持未放行
+		if len(held) > 0 {
+			if !quitAsking.CompareAndSwap(false, true) {
+				return // 上一次退出还在询问
+			}
+			go func() {
+				defer quitAsking.Store(false)
+				for _, h := range held {
+					if entryFor(h.w) != h.e {
+						continue // 窗口已关
+					}
+					if !h.e.sync.Held() {
+						continue // 询问前一个窗口期间，用户已在这个窗口的提示条上做了选择；其余编辑由第二次退出照常收齐
+					}
+					if !askAndResolveHeld(h.w, h.e) {
+						return // 取消：不再退出
+					}
+				}
+				mygo.App.Quit() // 第二次进入时不再有暂停的窗口，其余窗口照常收齐
+			}()
+			return
+		}
 		go func() {
 			var wg sync.WaitGroup
 			for _, w := range pending {
@@ -227,12 +290,14 @@ func (Service) entry(ctx context.Context) (*entry, error) {
 	return nil, ErrNoDocument
 }
 
-// Ready 返回页面需要的一次性上下文。
+// Ready 返回页面需要的一次性上下文。刚载入（或重新载入）的页面没有未推送的编辑，也不在暂停中：
+// Discard 结束旧页面留下的暂停和待推送序号，否则 held 永远不解除，新页面的 markDirty 也会被当成旧序号丢掉。
 func (s Service) Ready(ctx context.Context) (ReadyInfo, error) {
 	e, err := s.entry(ctx)
 	if err != nil {
 		return ReadyInfo{}, err
 	}
+	e.sync.Discard()
 	st, c := e.doc.State(), e.doc.Content()
 	dir := ""
 	if st.Path != "" {
@@ -295,21 +360,48 @@ func (s Service) Flushed(ctx context.Context, n int64) error {
 }
 
 // Revert 重新读盘，丢弃本地编辑（只供提示条调用，提示条本身就是确认）。
+// 页面已丢弃未推送的编辑：先 Discard，否则 NeedsFlush 一直为真，状态钩子会让自动保存反复写盘。
 func (s Service) Revert(ctx context.Context) error {
 	e, err := s.entry(ctx)
 	if err != nil {
 		return err
 	}
+	e.sync.Discard()
 	return e.doc.Revert()
 }
 
-// SaveAnyway：冲突时「保留我的版本」。
+// HoldConflict：页面收到 onDocumentReload 时还有未推送的编辑，已暂停推送并显示冲突提示条（技术方案 5.4 节）。
+// 解除之前不重新标记已编辑、不发起收齐；关窗和退出时先问保留哪个版本（hold.go）。
+func (s Service) HoldConflict(ctx context.Context) error {
+	e, err := s.entry(ctx)
+	if err != nil {
+		return err
+	}
+	e.sync.Hold()
+	return nil
+}
+
+// SaveAnyway：冲突时「保留我的版本」。页面已恢复推送，结束竞态冲突的暂停。
 func (s Service) SaveAnyway(ctx context.Context) error {
 	e, err := s.entry(ctx)
 	if err != nil {
 		return err
 	}
+	e.sync.Release()
 	return e.doc.SaveAnyway()
+}
+
+// RevertWindow 是菜单「还原到上次保存的版本」：先丢弃页面未推送的编辑（否则自动保存会反复写盘），再重新读盘。
+// 竞态冲突暂停中的页面不载入 onDocumentReload（5.4），所以再发 conflictResolved「disk」让它载入；
+// 读盘失败时也发，Go 侧已不在暂停中，页面显示 Go 侧的内容。
+func RevertWindow(w *mygo.Window, d *Document) error {
+	wasHeld := false
+	if e := entryFor(w); e != nil {
+		wasHeld = e.sync.Discard()
+	}
+	err := d.Revert()
+	notifyResolved(w, heldLoadDisk, wasHeld)
+	return err
 }
 
 // Save：页面发起的保存（菜单保存走 Go 侧，先收齐）。
@@ -411,6 +503,7 @@ func (s Service) DiscardRecovered(ctx context.Context) error {
 		return err
 	}
 	e.recovered = false
+	e.sync.Discard()
 	if e.doc.State().Path == "" {
 		e.doc.SetEdited(false)
 		e.doc.Close()

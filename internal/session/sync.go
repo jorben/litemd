@@ -3,7 +3,8 @@
 // sync.go 是不依赖 mygo 的状态机，便于单元测试：
 //   - 页面每次用户编辑 editSeq++；从「已同步」变成「有未推送编辑」时立即 MarkDirty(seq)；
 //   - 防抖后 SetContent(seq, text)；绑定调用并发执行、可能乱序，序号旧的直接丢弃；
-//   - 保存、关窗、退出前 Go 侧 RequestFlush，页面推送最新内容后 Flushed(n)，超时 800 ms 放行。
+//   - 保存、关窗、退出前 Go 侧 RequestFlush，页面推送最新内容后 Flushed(n)，超时 800 ms 放行；
+//   - 竞态冲突（5.4）：页面暂停推送期间 Hold，用户选定版本后 Release 或 Discard。
 package session
 
 import (
@@ -20,6 +21,7 @@ type Sync struct {
 	pendingSeq int64 // 页面报告过的最大编辑序号（MarkDirty 或 SetContent）
 	lastSeq    int64 // 已应用的最大 SetContent 序号
 	givenUp    int64 // 收齐超时时放弃等待的序号：不再认为它需要收齐，避免关窗/退出反复卡住
+	held       bool  // 竞态冲突：页面暂停推送，等用户选择保留哪个版本（技术方案 5.4 节）
 	nextFlush  int64
 	waiters    map[int64]chan struct{}
 }
@@ -63,6 +65,38 @@ func (s *Sync) Reset(seq int64) {
 	if seq > s.pendingSeq {
 		s.pendingSeq = seq
 	}
+}
+
+// Discard 丢弃页面未推送的编辑（还原、丢弃恢复、竞态冲突选「载入磁盘版本」）：不再需要收齐，并结束暂停。
+// 只降低 pendingSeq、不抬高 lastSeq：页面从 pushedSeq 继续编号，之后的推送仍要被接受。返回之前是否在暂停中。
+func (s *Sync) Discard() (wasHeld bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pendingSeq = s.lastSeq
+	wasHeld, s.held = s.held, false
+	return wasHeld
+}
+
+// Hold 记录页面进入竞态冲突、暂停推送：在 Release 或 Discard 之前，Go 侧的序号不反映页面的编辑。
+func (s *Sync) Hold() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.held = true
+}
+
+// Release 在用户选择「保留我的版本」后结束暂停。返回之前是否在暂停中。
+func (s *Sync) Release() (wasHeld bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wasHeld, s.held = s.held, false
+	return wasHeld
+}
+
+// Held 报告是否处于竞态冲突的暂停中。
+func (s *Sync) Held() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.held
 }
 
 // Seq 返回已应用的最新序号（页面重新读取内容时，从这个序号继续）。
@@ -114,6 +148,12 @@ func (s *Sync) Flush(emit func(n int64) error, timeout time.Duration) bool {
 	if !s.NeedsFlush() {
 		return true
 	}
+	return s.ForceFlush(emit, timeout)
+}
+
+// ForceFlush 不看 NeedsFlush，总是发出收齐请求并等待应答（竞态冲突暂停时 Go 侧的序号不反映页面的编辑）。
+// 返回 false 表示超时或发送失败。不可在主线程调用。
+func (s *Sync) ForceFlush(emit func(n int64) error, timeout time.Duration) bool {
 	n, done := s.RequestFlush()
 	if err := emit(n); err != nil {
 		s.GiveUp()

@@ -154,7 +154,8 @@ func installMenu() {
 			if err != nil || r.Button != 0 {
 				return err
 			}
-			return d.Revert()
+			// 页面未推送的编辑随还原丢弃；竞态冲突暂停中的页面由 conflictResolved 通知载入
+			return session.RevertWindow(d.Window(), d)
 		}),
 		// 导出与打印：页面生成 HTML 后调用 Export 服务（M2）
 		"export-html":  toPage("export-html"),

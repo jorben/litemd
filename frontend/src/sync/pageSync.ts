@@ -1,7 +1,7 @@
 // 页面侧的内容同步（技术方案第 5 节）。
 //   - 只有用户编辑才计数、推送（5.1）；
 //   - 从「已同步」变成「有未推送编辑」时立即 markDirty(seq)，防抖后 setContent(seq, text)（5.2）；
-//   - 收到 Go 的收齐请求 n：有未推送的编辑就立即推送，再 flushed(n)（5.3）；
+//   - 收到 Go 的收齐请求 n：有未推送的编辑就立即推送，再 flushed(n)（5.3）；暂停时只有强制收齐才推送（5.4）；
 //   - 失焦、visibilitychange、切换模式时立即推送。
 // 与 mygo 生成的客户端解耦，便于单元测试。
 
@@ -31,6 +31,11 @@ export class PageSync {
   pushedSeq = 0;
   /** 暂停推送（冲突提示条显示期间，5.4） */
   paused = false;
+  /**
+   * 竞态冲突的暂停尚未结束（5.4）。提示条按钮与 Go 的 conflictResolved 事件都经 release() 结束它，
+   * 只有第一个生效，不会重复处理。
+   */
+  held = false;
   private timer: unknown = null;
   private readonly o: Required<PageSyncOptions>;
 
@@ -50,6 +55,21 @@ export class PageSync {
     this.editSeq = seq;
     this.pushedSeq = seq;
     this.paused = false;
+    this.held = false;
+  }
+
+  /** 进入竞态冲突的暂停：不再推送，直到 release() 或 reset()。 */
+  hold(): void {
+    this.paused = true;
+    this.held = true;
+  }
+
+  /** 结束竞态冲突的暂停、恢复推送（不立即推送）。返回是否确实在暂停中；已结束时什么都不做。 */
+  release(): boolean {
+    if (!this.held) return false;
+    this.held = false;
+    this.paused = false;
+    return true;
   }
 
   get hasUnpushed(): boolean {
@@ -78,19 +98,19 @@ export class PageSync {
     this.timer = null;
   }
 
-  /** 立即推送未同步的编辑。 */
-  async push(): Promise<void> {
+  /** 立即推送未同步的编辑。force：暂停中也推送（用户已在关窗或退出对话框里选了「保留我的版本」）。 */
+  async push(force = false): Promise<void> {
     this.cancel();
-    if (this.paused || !this.hasUnpushed) return;
+    if ((this.paused && !force) || !this.hasUnpushed) return;
     const seq = this.editSeq;
     const text = this.o.getText();
     this.pushedSeq = seq;
     await this.o.client.setContent(seq, text);
   }
 
-  /** 回应 Go 的收齐请求。 */
-  async flush(n: number): Promise<void> {
-    await this.push();
+  /** 回应 Go 的收齐请求。非强制的收齐在暂停中不推送，不会静默覆盖磁盘上的外部修改。 */
+  async flush(n: number, force = false): Promise<void> {
+    await this.push(force);
     await this.o.client.flushed(n);
   }
 }

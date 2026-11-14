@@ -65,6 +65,63 @@ describe("页面同步协议（技术方案第 5 节）", () => {
     s.edit();
     expect(calls.at(-1)).toBe("dirty:21");
   });
+
+  it("暂停时（竞态冲突）非强制收齐只应答不推送，编辑仍未推送", async () => {
+    const { s, calls, setText } = setup();
+    s.edit();
+    s.paused = true;
+    setText("我的版本");
+    await s.flush(3);
+    expect(calls).toEqual(["dirty:1", "flushed:3"]);
+    expect(s.hasUnpushed).toBe(true);
+  });
+
+  it("暂停时强制收齐（关窗、退出时选「保留我的版本」）：先推送再应答", async () => {
+    const { s, calls, setText } = setup();
+    s.edit();
+    s.paused = true;
+    setText("我的版本");
+    await s.flush(4, true);
+    expect(calls).toEqual(["dirty:1", "set:1:我的版本", "flushed:4"]);
+    expect(s.hasUnpushed).toBe(false);
+    expect(s.paused).toBe(true);
+  });
+
+  it("竞态冲突：Go 选了「保留我的版本」后 release 恢复推送，强制收齐之后的编辑照常 markDirty 并推送", async () => {
+    const { s, calls, fire, setText } = setup();
+    s.edit();
+    s.hold();
+    setText("我的版本");
+    await s.flush(1, true);
+    // 退出被取消，用户继续编辑
+    setText("我的版本加");
+    s.edit();
+    fire();
+    await s.push();
+    expect(calls).toEqual(["dirty:1", "set:1:我的版本", "flushed:1", "dirty:2"]);
+    expect(s.release()).toBe(true);
+    expect(s.paused).toBe(false);
+    await s.push();
+    expect(calls.at(-1)).toBe("set:2:我的版本加");
+    s.edit();
+    fire();
+    await Promise.resolve();
+    expect(calls.slice(-2)).toEqual(["dirty:3", "set:3:我的版本加"]);
+  });
+
+  it("竞态冲突只结束一次：提示条与 conflictResolved 事件先到者生效，reset（载入磁盘版本）也结束暂停", () => {
+    const { s } = setup();
+    expect(s.release()).toBe(false);
+    s.hold();
+    expect(s.paused && s.held).toBe(true);
+    expect(s.release()).toBe(true);
+    expect(s.release()).toBe(false);
+    s.edit();
+    s.hold();
+    s.reset(s.pushedSeq);
+    expect(s.held || s.paused || s.hasUnpushed).toBe(false);
+    expect(s.release()).toBe(false);
+  });
 });
 
 describe("按键路径（NF2）", () => {

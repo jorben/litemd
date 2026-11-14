@@ -150,9 +150,16 @@ export async function docPage(app: HTMLElement): Promise<void> {
     else if (mode === "wysiwyg" || rich.dirty) {
       text = rich.serialize();
       if (rich.lastMode === "full") showBanner(reformatBanner());
-    }
+    } else text = rich.source; // 暂停推送时离开源码模式会把未推送的文本载入为基线，text 还是旧的
     scheduleStatus();
     return text;
+  }
+  /**
+   * 所见即所得的当前文档（不改基线）。暂停推送（竞态冲突，5.4）时 text 停在最后一次推送：有编辑就序列化，
+   * 否则用基线原文（离开源码模式时 rich.load 把当时的文本设为基线）。
+   */
+  function richText(): string {
+    return rich.dirty ? rich.peek().text : rich.source;
   }
 
   function createSource(t0: string): SourceEditor {
@@ -211,8 +218,10 @@ export async function docPage(app: HTMLElement): Promise<void> {
     if (next === "preview" || next === "wysiwyg") rich.setEditable(next === "wysiwyg");
     if (next === "source" || next === "split") {
       if (!source) {
-        sourceEntry = text;
-        source = createSource(text);
+        // 暂停推送（竞态冲突，5.4）时上面的 push 被跳过，text 是旧内容：从所见即所得的当前文档取
+        const t0 = richText();
+        sourceEntry = t0;
+        source = createSource(t0);
       } else sourceEntry = source.text;
     }
     if (next === "split") renderSplit();
@@ -370,6 +379,11 @@ export async function docPage(app: HTMLElement): Promise<void> {
     await revert();
     await reloadContent();
   }
+  /** Go 侧已丢弃页面的编辑、内容是磁盘版本（conflictResolved「disk」）：丢弃本地编辑，重新取正文。 */
+  async function discardAndReload(): Promise<void> {
+    sync.reset(sync.pushedSeq);
+    await reloadContent();
+  }
   async function reloadContent(): Promise<void> {
     const c = await Session.content();
     text = c.text;
@@ -390,13 +404,21 @@ export async function docPage(app: HTMLElement): Promise<void> {
       detail: t("你在这里还有未保存的改动。选择保留哪个版本。"),
       actions: [
         { label: t("载入磁盘版本"), run: () => loadFromDisk(() => Session.revert()) },
-        { label: t("保留我的版本"), primary: true, run: async () => { sync.paused = false; await sync.push(); await Session.saveAnyway(); } },
+        { label: t("保留我的版本"), primary: true, run: async () => { sync.release(); await sync.push(); await Session.saveAnyway(); } },
       ],
     };
   }
 
   // ---- Go 侧事件 ----
-  events.flush.on(({ n }) => void sync.flush(n));
+  events.flush.on(({ n, force }) => void sync.flush(n, force));
+  // 5.4：Go 侧（关窗、退出对话框或菜单「还原」）结束了竞态冲突的暂停。关窗或退出之后可能被取消，页面要跟上：
+  // keep 恢复推送（推送强制收齐之后的编辑），disk 载入 Go 侧的内容。提示条已处理过时 release() 为 false，不重复处理
+  events.conflictResolved.on(({ choice }) => {
+    if (!sync.release()) return;
+    hideBanner("conflict");
+    if (choice === "disk") void discardAndReload();
+    else void sync.push();
+  });
   events.command.on(({ id }) => runCommand(id, "menu"));
   events.settingsChanged.on((v) => {
     const prevNet = getSettings().networkImages;
@@ -422,10 +444,12 @@ export async function docPage(app: HTMLElement): Promise<void> {
   window.addEventListener("blur", () => void sync.push());
   document.addEventListener("visibilitychange", () => void sync.push());
 
-  // 5.4：mygo 已重新读盘（只在 Go 侧认为未编辑时）。页面自己还有未推送的编辑：不载入，显示冲突提示
+  // 5.4：mygo 已重新读盘（只在 Go 侧认为未编辑时）。页面自己还有未推送的编辑：不载入，显示冲突提示。
+  // 通知 Go 暂停：不再重新标记已编辑、不自动保存；关窗或退出时由 Go 弹对话框问保留哪个版本
   onDocumentReload(async () => {
     if (sync.hasUnpushed && !sync.paused) {
-      sync.paused = true;
+      sync.hold();
+      void Session.holdConflict().catch(() => {});
       showBanner(conflictBanner(t("磁盘上的文件已被修改")));
       return;
     }

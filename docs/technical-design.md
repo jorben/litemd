@@ -295,15 +295,16 @@ func showIfIdle() {
 | `Session` | `markDirty(seq)` | 第 5.2 节：页面出现未推送的编辑时立即调用，让 Go 侧进入“已编辑” |
 | `Session` | `setContent(seq, text)` | 第 5.2 节：带序号推送正文，Go 侧丢弃过期的推送 |
 | `Session` | `flushed(n)` | 回应第 5.3 节的收齐请求 |
-| `Session` | `revert()` | 不再弹确认框，直接重新读盘：只供提示条（冲突、恢复）调用，提示条本身就是确认 |
-| `Session` | `saveAnyway()` | 冲突提示条「保留我的版本」 |
-| `Session` | `discardRecovered()` | 恢复提示条「丢弃」（第 3.3 节） |
+| `Session` | `revert()` | 不再弹确认框，直接重新读盘：只供提示条（冲突、恢复）调用，提示条本身就是确认。先丢弃页面未推送的编辑（第 5.4 节） |
+| `Session` | `holdConflict()` | 第 5.4 节竞态：页面暂停推送、显示冲突提示条时调用，Go 侧进入「暂停」 |
+| `Session` | `saveAnyway()` | 冲突提示条「保留我的版本」；解除第 5.4 节的暂停 |
+| `Session` | `discardRecovered()` | 恢复提示条「丢弃」（第 3.3 节）；同样先丢弃页面未推送的编辑 |
 | `Session` | `saveAsUTF8()` | 非 UTF-8 文档另存为 UTF-8（第 3.2 节） |
 | `Session` | `setFileState(state)` | 按文件保存查看模式、大纲开关、滚动位置 |
 | `Session` | `setMenuState(state)` | 当前模式下哪些菜单命令可用，Go 据此置灰 |
 | `Start` | `newDocument()` `open()` `recent()` `openRecent(path)` `clearRecent()` | 只供启动窗口调用（第 3.3.1 节）；其他窗口调用时拒绝 |
 | `Assets` | `saveImage(bytes, mime, suggestedName)` → 相对路径 | F6.3：按设置的规则存到文档目录（默认 `./assets/`，D4），文件名冲突时加序号，大小上限 50 MB，只接受图片 MIME 类型。未命名文档返回 `ErrNeedSave`（F6.4：提示先保存） |
-| `Assets` | `importDropped(paths)` → 相对路径列表 | F6.3/F6.5：**只接受本窗口最近一次 `OnFileDrop` 登记过的路径**（第 7 节）；图片复制到 assets 目录，非图片只计算相对路径，不复制 |
+| `Assets` | `importDropped(paths)` → 相对路径列表 | F6.3/F6.5：**只接受本窗口最近一次 `OnFileDrop` 登记过的路径**（第 7 节）；图片复制到 assets 目录（位图按文件头定扩展名，SVG/ICO 核对内容后沿用原扩展名），非图片只计算相对路径，不复制；结果与 `paths` 一一对应，某张图片读不了、不是图片或太大时对应项为空字符串，页面跳过它，不影响其他文件 |
 | `Assets` | `fetchImage(url)` → 图片字节 | F6.2：关闭“加载网络图片”后，用户点击单张图片时由 Go 下载（第 3.5 节） |
 | `Links` | `open(href)` | 外部链接交给系统浏览器；相对路径的 `.md` 链接用 `docs.Open` 开新窗口（F5.5）；其他本地文件见第 7 节 |
 | `Export` | `html(html, opts)` | F8.1：页面生成 HTML，Go 弹保存对话框后写盘；选“内嵌图片”时由 Go 读取图片转成 base64 |
@@ -487,17 +488,24 @@ Go：该窗口 pendingSeq ≤ lastSeq → 无需收齐，直接继续
 Go：等到 flushed(n)，超时 800 ms → 继续原操作（超时记日志；内容以最后一次 setContent 为准）
 ```
 
+页面暂停推送时（第 5.4 节的竞态），普通收齐只应答、不推送，不会静默覆盖磁盘上的外部修改。只有用户在关窗或退出对话框里选了「保留我的版本」时，Go 发出 `{n, force: true}`：不看序号、总是发出，页面即使暂停也推送。
+
 | 场景 | 接入点 |
 |---|---|
 | 菜单保存、副本、另存为、导出、打印 | 自建文件菜单的 `Click`（第 3.6 节）：先收齐，再执行 |
-| 关窗 | `newDocWindow` 里注册的 `OnClose`，排在 mygo 的关闭监听之前（第 3.3 节）。窗口需要收齐时 `PreventDefault`（mygo 看到已阻止就不处理），收齐后再次调用 `Close()`；第二次无需收齐，放行给 mygo 的保存/询问流程。**应用正在退出时一律放行**：退出时 mygo 会对每个窗口调用 `close`，此时阻止会取消整个退出（`app.go` 的 `prepareQuit`） |
-| 退出 | `session.InstallQuitFlush` 在 `NewDocuments` **之前**注册 `OnBeforeQuit`，排在 mygo 的 `documentsBeforeQuit` 前面。有窗口需要收齐时：`PreventDefault`，并行收齐，然后再次 `App.Quit()`；没有需要收齐的窗口时不做任何事，交给 mygo。因为“是否需要收齐”由序号判断，第二次进入时必然放行，不会和 mygo 自己的“阻止 → 处理 → 再次退出”流程互相打断。监听在放行时记下“正在退出”，在 `OnQuitCanceled` 中清除 |
-| 关机、注销（`e.SessionEnding`） | 不能阻止也不能等待，只能依赖最近一次推送。由于有脏标记，mygo 会把这类文档当作已编辑处理（写盘或留恢复副本），最多丢失最后 150–400 ms 的输入 |
+| 关窗 | `newDocWindow` 里注册的 `OnClose`，排在 mygo 的关闭监听之前（第 3.3 节）。窗口需要收齐时 `PreventDefault`（mygo 看到已阻止就不处理），收齐后再次调用 `Close()`；第二次无需收齐，放行给 mygo 的保存/询问流程。处于第 5.4 节「暂停」的窗口不收齐，而是 `PreventDefault` 后在该窗口上弹模态对话框（见第 5.4 节），选定后再关一次。**应用正在退出时一律放行**：退出时 mygo 会对每个窗口调用 `close`，此时阻止会取消整个退出（`app.go` 的 `prepareQuit`） |
+| 退出 | `session.InstallQuitFlush` 在 `NewDocuments` **之前**注册 `OnBeforeQuit`，排在 mygo 的 `documentsBeforeQuit` 前面。有窗口需要收齐时：`PreventDefault`，并行收齐，然后再次 `App.Quit()`；没有需要收齐的窗口时不做任何事，交给 mygo。因为“是否需要收齐”由序号判断，第二次进入时必然放行，不会和 mygo 自己的“阻止 → 处理 → 再次退出”流程互相打断。监听在放行时记下“正在退出”，在 `OnQuitCanceled` 中清除。有「暂停」的窗口时先处理它们：`PreventDefault`，逐个弹第 5.4 节的对话框（在 mygo 的关窗过程之前，因为退出中的关窗不能阻止）；任一窗口选「取消」就取消退出，全部选定后再次 `App.Quit()`，第二次进入时不再有暂停的窗口 |
+| 关机、注销（`e.SessionEnding`） | 不能阻止也不能等待，只能依赖最近一次推送。由于有脏标记，mygo 会把这类文档当作已编辑处理（写盘或留恢复副本），最多丢失最后 150–400 ms 的输入。「暂停」中的窗口没法询问，其未推送的编辑不在 Go 侧 |
 
 ### 5.4 外部修改、冲突与恢复
 
 - **`onDocumentReload`**：mygo 已经重新读入了磁盘内容（只在 Go 侧认为“未编辑”时发生）。页面先保存当前模式的滚动锚点，调用 `Session.content()` 重新载入文本、重建保真基线，再恢复位置。
-- **竞态**：极少数情况下，`markDirty` 还在路上时 mygo 已经重新读盘。页面收到 `onDocumentReload` 时如果自己还有未推送的编辑，就**不载入**磁盘内容，改为显示冲突提示条「磁盘上的文件已被修改」，并暂停推送，直到用户选择：「载入磁盘版本」→ 丢弃本地编辑并重新载入；「保留我的版本」→ 推送本地内容后 `Session.saveAnyway()`。
+- **竞态**：极少数情况下，`markDirty` 还在路上时 mygo 已经重新读盘。页面收到 `onDocumentReload` 时如果自己还有未推送的编辑，就**不载入**磁盘内容，改为显示冲突提示条「磁盘上的文件已被修改」，并暂停推送，直到用户选择：「载入磁盘版本」→ 丢弃本地编辑并重新载入（`Session.revert()`）；「保留我的版本」→ 推送本地内容后 `Session.saveAnyway()`。
+  - **Go 侧的「暂停」**：mygo 没有把文档置为冲突的公开接口。页面暂停时调用 `Session.holdConflict()`，Go 在该窗口的同步状态上记下「暂停」。暂停期间，文档变回「未编辑」时不再重新标记已编辑、不发起收齐（否则页面不推送、自动保存每秒重写一次文件）；普通收齐仍不推送。提示条的「保留我的版本」（`saveAnyway`）和「载入磁盘版本」（`revert`）都解除暂停。
+  - **关窗、退出时的对话框**：暂停中的窗口关闭时（退出时在 `OnBeforeQuit` 里逐个处理，见第 5.3 节），在该窗口上弹模态对话框「「文件名」在磁盘上已被修改」，三个按钮：「保留我的版本」→ 强制收齐（`force`）拿到页面内容后 `SaveAnyway`，解除暂停并关窗（收齐超时或写盘失败则不关，仍保持暂停）；「载入磁盘版本」→ 丢弃待收齐的序号、解除暂停、标为未编辑后不保存直接关闭；「取消」→ 不关窗（退出时取消整个退出）。
+  - **通知页面（`conflictResolved` 事件）**：Go 侧结束暂停时——关窗或退出对话框选了「保留我的版本」或「载入磁盘版本」，或菜单「还原到上次保存的版本」——向该窗口的页面发 `conflictResolved {choice: "keep" | "disk"}`。关窗、退出之后仍可能被取消（另一个窗口选了「取消」、mygo 第二轮的保存询问、关窗失败），页面不能一直停在暂停里，否则之后的编辑只有 `markDirty` 没有推送。页面收到 `keep`：恢复推送、收起冲突提示条，并推送强制收齐之后的编辑；收到 `disk`：丢弃本地编辑，用 `Session.content()` 按 Go 的序号重新载入正文，恢复推送并收起提示条。菜单「还原」时页面处于暂停，会忽略随之而来的 `onDocumentReload`，靠这个事件载入。只有 Go 侧确实处于暂停时才发；提示条按钮由页面自己处理、不触发事件，两条路径都经过同一个「暂停未结束」标记（`PageSync.release()`），只有先到的一个生效。
+  - **页面重新载入**：`Session.ready()` 解除 Go 侧的暂停并丢弃待推送的序号（`Sync.Discard`），刚载入的页面没有未推送的编辑。
+- **丢弃页面的编辑**：`Session.revert()`、`Session.discardRecovered()` 和菜单「还原到上次保存的版本」在重新读盘前把 Go 侧的 `pendingSeq` 降到 `lastSeq`（`Sync.Discard`）。否则页面丢掉的编辑仍让 Go 认为「需要收齐」，状态钩子反复重新标记已编辑，自动保存每秒重写一次文件。
 - **冲突状态**（`onDocumentState` 中 `conflict = true`）：页面顶部显示提示条：「载入磁盘版本」调用 `Session.revert()`（不再弹确认框）；「保留我的版本」调用 `Session.saveAnyway()`。提示条显示期间，用户主动保存或关窗时由 mygo 弹系统对话框（`resolveConflict` / `askToSave`），符合 D12。
 - **文件被删除**：提示条提供「另存为」。
 - **恢复的文档**：提示条「已恢复上次未保存的内容」，见第 3.3 节。

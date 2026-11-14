@@ -9,6 +9,14 @@ export interface CommandRequest {
   id: string;
 }
 
+/**
+ * ConflictResolution 是 Go 侧结束竞态冲突暂停的结果（技术方案 5.4 节）。
+ * Choice：keep 是「保留我的版本」，页面恢复推送；disk 是「载入磁盘版本」或菜单「还原」，页面丢弃本地编辑并重新取正文。
+ */
+export interface ConflictResolution {
+  choice: string;
+}
+
 /** ContentInfo 是正文与当前序号。 */
 export interface ContentInfo {
   text: string;
@@ -60,9 +68,13 @@ export interface Filter {
   extensions: string[];
 }
 
-/** FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。 */
+/**
+ * FlushRequest 是发给页面的收齐请求（技术方案 5.3 节）。
+ * Force：竞态冲突中用户在关窗或退出对话框里选了「保留我的版本」，页面即使暂停推送也要推送（5.4 节）。
+ */
 export interface FlushRequest {
   n: number;
+  force?: boolean;
 }
 
 /** Image 是 fetchImage 的结果（[]byte 在 TS 中为 base64 字符串）。 */
@@ -211,15 +223,28 @@ export const Session = {
   flushed(n: number): Promise<void> {
     return call("Session.Flushed", n);
   },
+  /**
+   * HoldConflict：页面收到 onDocumentReload 时还有未推送的编辑，已暂停推送并显示冲突提示条（技术方案 5.4 节）。
+   * 解除之前不重新标记已编辑、不发起收齐；关窗和退出时先问保留哪个版本（hold.go）。
+   */
+  holdConflict(): Promise<void> {
+    return call("Session.HoldConflict");
+  },
   /** MarkDirty：页面出现未推送的编辑，立即让文档进入「已编辑」（外部修改时进入冲突而不是被冲掉）。 */
   markDirty(seq: number): Promise<void> {
     return call("Session.MarkDirty", seq);
   },
-  /** Ready 返回页面需要的一次性上下文。 */
+  /**
+   * Ready 返回页面需要的一次性上下文。刚载入（或重新载入）的页面没有未推送的编辑，也不在暂停中：
+   * Discard 结束旧页面留下的暂停和待推送序号，否则 held 永远不解除，新页面的 markDirty 也会被当成旧序号丢掉。
+   */
   ready(): Promise<ReadyInfo> {
     return call("Session.Ready");
   },
-  /** Revert 重新读盘，丢弃本地编辑（只供提示条调用，提示条本身就是确认）。 */
+  /**
+   * Revert 重新读盘，丢弃本地编辑（只供提示条调用，提示条本身就是确认）。
+   * 页面已丢弃未推送的编辑：先 Discard，否则 NeedsFlush 一直为真，状态钩子会让自动保存反复写盘。
+   */
   revert(): Promise<void> {
     return call("Session.Revert");
   },
@@ -227,7 +252,7 @@ export const Session = {
   save(): Promise<void> {
     return call("Session.Save");
   },
-  /** SaveAnyway：冲突时「保留我的版本」。 */
+  /** SaveAnyway：冲突时「保留我的版本」。页面已恢复推送，结束竞态冲突的暂停。 */
   saveAnyway(): Promise<void> {
     return call("Session.SaveAnyway");
   },
@@ -286,7 +311,10 @@ export const Assets = {
   fetchImage(rawURL: string): Promise<Image> {
     return call("Assets.FetchImage", rawURL);
   },
-  /** ImportDropped：拖入正文的文件。图片复制到图片目录，其他文件只计算相对路径（F6.3/F6.5）。 */
+  /**
+   * ImportDropped：拖入正文的文件。图片复制到图片目录，其他文件只计算相对路径（F6.3/F6.5）。
+   * 结果与 paths 一一对应；某张图片读不了、不是图片或太大时，它的结果为空字符串（页面跳过），不影响其他文件。
+   */
   importDropped(paths: string[]): Promise<string[]> {
     return call("Assets.ImportDropped", paths);
   },
@@ -396,6 +424,8 @@ export const events = {
   command: event<CommandRequest>("command"),
   /** Flush 事件：页面收到后立即推送未同步的编辑，再调用 Session.flushed(n)。 */
   flush: event<FlushRequest>("flush"),
+  /** ConflictResolved 事件：Go 侧（关窗、退出对话框或菜单「还原」）结束了竞态冲突的暂停。页面自己的提示条按钮不触发它。 */
+  conflictResolved: event<ConflictResolution>("conflict-resolved"),
   /** Changed 在设置改动后广播给所有窗口。 */
   settingsChanged: event<View>("settings-changed"),
   /** ShowTab 让设置窗口切到某个分组（「关于 LiteMd」）。 */
