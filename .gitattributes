@@ -1,2 +1,6 @@
+# 文本文件在所有平台都以 LF 检出：Windows runner 默认 core.autocrlf=true，会把 golden 文件
+# （docs/keybindings.md、internal/menu/testdata/accelerators.json）转成 CRLF，与生成结果对不上。
+* text=auto eol=lf
+
 # 保真语料按字节保存（含 CRLF、BOM、混合换行样例），git 不得改动换行
 testdata/** -text
