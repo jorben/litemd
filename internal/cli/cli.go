@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+
+	"github.com/jorben/litemd/internal/localpath"
 )
 
 var markdownExt = map[string]bool{".md": true, ".markdown": true, ".mdown": true, ".mkd": true}
@@ -30,11 +32,10 @@ func Plan(args []string, workingDir string, exists func(string) (isDir, ok bool)
 		if a == "" || strings.HasPrefix(a, "-") || strings.Contains(a, "://") {
 			continue
 		}
-		p := a
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(workingDir, p)
+		p := localpath.Join(workingDir, a) // Windows 上 \notes 这类无盘符的根路径取工作目录的盘符
+		if p == "" {
+			continue
 		}
-		p = filepath.Clean(p)
 		ext := strings.ToLower(filepath.Ext(p))
 		isDir, ok := exists(p)
 		if isDir {

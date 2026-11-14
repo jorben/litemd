@@ -2,12 +2,22 @@ package links
 
 import (
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
+// abs 把 /x/y 写成本机的绝对路径：Windows 上加盘符 C:。
+func abs(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
+
 func TestClassify(t *testing.T) {
-	execs := map[string]bool{"/d/run": true, "/d/folder": true}
-	isExec := func(p string) bool { return execs[filepath.ToSlash(p)] }
+	execs := map[string]bool{abs("/d/run"): true, abs("/d/folder"): true}
+	isExec := func(p string) bool { return execs[p] }
 	cases := []struct {
 		href string
 		kind Kind
@@ -32,8 +42,12 @@ func TestClassify(t *testing.T) {
 		{"", Invalid, ""},
 	}
 	for _, c := range cases {
-		k, got := Classify(c.href, "/d", isExec)
-		if k != c.kind || filepath.ToSlash(got) != c.want {
+		want := c.want
+		if strings.HasPrefix(want, "/") { // 本地路径；Windows 上无盘符的根路径取文档目录的盘符
+			want = abs(want)
+		}
+		k, got := Classify(c.href, abs("/d"), isExec)
+		if k != c.kind || got != want {
 			t.Errorf("Classify(%q) = %v %q, want %v %q", c.href, k, got, c.kind, c.want)
 		}
 	}

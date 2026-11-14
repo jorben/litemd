@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -40,19 +41,30 @@ func TestSniff(t *testing.T) {
 	}
 }
 
+// abs 把 /x/y 写成本机的绝对路径：Windows 上加盘符 C:。
+func abs(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
+
 func TestResolve(t *testing.T) {
-	dir := "/docs/proj"
+	dir := abs("/docs/proj")
 	cases := map[string]string{
 		"./assets/a.png":            "/docs/proj/assets/a.png",
 		"assets/a%20b.png":          "/docs/proj/assets/a b.png",
 		"../images/x.png":           "/docs/images/x.png", // NF5：允许文档目录之外
-		"/abs/y.png":                "/abs/y.png",
+		"/abs/y.png":                "/abs/y.png",         // Windows：当前盘的根，取文档目录的盘符
 		"file:///abs/z.png":         "/abs/z.png",
 		"https://example.com/a.png": "",
 		"a.png?v=1#frag":            "/docs/proj/a.png",
 	}
 	for ref, want := range cases {
-		if got := Resolve(dir, ref); got != filepath.FromSlash(want) {
+		if want != "" {
+			want = abs(want)
+		}
+		if got := Resolve(dir, ref); got != want {
 			t.Errorf("Resolve(%q) = %q, want %q", ref, got, want)
 		}
 	}

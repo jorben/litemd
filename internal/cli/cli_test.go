@@ -4,23 +4,32 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
+// abs 把 /x/y 写成本机的绝对路径：Windows 上加盘符 C:。
+func abs(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
+
 func TestPlan(t *testing.T) {
-	files := map[string]bool{"/w/a.md": false, "/w/b.txt": false, "/w/dir": true, "/w/c.pdf": false, "/w/notes.md": false}
+	files := map[string]bool{abs("/w/a.md"): false, abs("/w/b.txt"): false, abs("/w/dir"): true, abs("/w/c.pdf"): false, abs("/w/notes.md"): false}
 	exists := func(p string) (bool, bool) {
 		d, ok := files[p]
 		return d, ok
 	}
-	got := Plan([]string{"-v", "a.md", "new.md", "b.txt", "new.txt", "dir", "c.pdf", "x.pdf", "notes", "todo", "/abs/z.markdown", "file:///w/a.md", ""}, "/w", exists)
+	got := Plan([]string{"-v", "a.md", "new.md", "b.txt", "new.txt", "dir", "c.pdf", "x.pdf", "notes", "todo", "/abs/z.markdown", "file:///w/a.md", ""}, abs("/w"), exists)
 	want := []Action{
-		{Path: "/w/new.md", Create: true},  // 不存在的 .md：创建
-		{Path: "/w/b.txt"},                 // 已存在的 .txt：mygo 不投递，这里打开
-		{Path: "/w/new.txt", Create: true}, // 不存在的 .txt：创建
-		{Path: "/w/notes.md"},              // 无扩展名，补 .md 后已存在
-		{Path: "/w/todo.md", Create: true}, // 无扩展名，补 .md 后创建
-		{Path: "/abs/z.markdown", Create: true},
+		{Path: abs("/w/new.md"), Create: true},  // 不存在的 .md：创建
+		{Path: abs("/w/b.txt")},                 // 已存在的 .txt：mygo 不投递，这里打开
+		{Path: abs("/w/new.txt"), Create: true}, // 不存在的 .txt：创建
+		{Path: abs("/w/notes.md")},              // 无扩展名，补 .md 后已存在
+		{Path: abs("/w/todo.md"), Create: true}, // 无扩展名，补 .md 后创建
+		{Path: abs("/abs/z.markdown"), Create: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("\n got %+v\nwant %+v", got, want)

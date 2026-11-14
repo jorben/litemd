@@ -27,6 +27,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/jorben/litemd/internal/localpath"
 	"github.com/jorben/litemd/internal/session"
 )
 
@@ -114,20 +115,14 @@ func Resolve(dir, ref string) string {
 		if u.Scheme != "file" {
 			return ""
 		}
-		ref = filepath.FromSlash(u.Path)
+		ref = localpath.FromFileURL(u)
 	} else if dec, err := url.PathUnescape(ref); err == nil {
 		ref = dec
 	}
 	if i := strings.IndexAny(ref, "?#"); i >= 0 {
 		ref = ref[:i]
 	}
-	if !filepath.IsAbs(ref) {
-		if dir == "" {
-			return ""
-		}
-		ref = filepath.Join(dir, filepath.FromSlash(ref))
-	}
-	return filepath.Clean(ref)
+	return localpath.Join(dir, filepath.FromSlash(ref))
 }
 
 // Register 注册 lmasset 协议，须在创建窗口之前调用。

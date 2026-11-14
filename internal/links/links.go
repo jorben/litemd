@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/jorben/litemd/internal/l10n"
+	"github.com/jorben/litemd/internal/localpath"
 
 	"github.com/jorben/litemd/internal/session"
 )
@@ -56,7 +57,7 @@ func Classify(href, dir string, isExecFile func(string) bool) (Kind, string) {
 	case "http", "https", "mailto":
 		return External, href
 	case "file":
-		href = filepath.FromSlash(u.Path)
+		href = localpath.FromFileURL(u)
 	case "":
 		p, err := url.PathUnescape(u.Path)
 		if err != nil {
@@ -69,13 +70,10 @@ func Classify(href, dir string, isExecFile func(string) bool) (Kind, string) {
 		}
 		return Invalid, "" // javascript:、data:、其他协议一律不打开
 	}
-	if !filepath.IsAbs(href) {
-		if dir == "" {
-			return Invalid, ""
-		}
-		href = filepath.Join(dir, href)
+	p := localpath.Join(dir, href)
+	if p == "" {
+		return Invalid, ""
 	}
-	p := filepath.Clean(href)
 	ext := strings.ToLower(filepath.Ext(p))
 	switch {
 	case execExt[ext]:
