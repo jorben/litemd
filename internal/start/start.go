@@ -25,6 +25,15 @@ var IdleDelay = 300 * time.Millisecond
 // MaxWait 是有文件在读时最多再等的时间。
 const MaxWait = 3 * time.Second
 
+// CloseDelay 是启动窗口先隐藏、再真正关闭的间隔。
+//
+// 从启动窗口拖入文件时，文档窗口是在页面的 drop 事件里（经 mygo 桥）打开的，此时 WebKit 的
+// 拖放往返还没结束。立刻关闭启动窗口会销毁它的 WKWebView：WebContent 进程随后为这个页面
+// 发来的剪贴板请求被判为非法消息而被杀掉，UI 进程里 WebPageProxy::performDragOperation 的
+// 回调再访问已销毁的页面，空指针崩溃，整个应用以 exit(2) 退出（macOS 27 上必现）。
+// 所以先隐藏（页面保留，拖放能正常收尾），过一会儿再关闭。
+var CloseDelay = time.Second
+
 var (
 	docs    *session.Docs
 	pending atomic.Int32
@@ -130,15 +139,21 @@ func Show() {
 	win = w
 }
 
-// Close 关闭启动窗口（任何文档窗口出现后，规则②）。
+// Close 关闭启动窗口（任何文档窗口出现后，规则②）：立即隐藏，CloseDelay 后再关闭，见 CloseDelay。
 func Close() {
 	mu.Lock()
 	w := win
 	win = nil
 	mu.Unlock()
-	if w != nil && !w.IsDestroyed() {
-		w.Close()
+	if w == nil || w.IsDestroyed() {
+		return
 	}
+	w.Hide()
+	time.AfterFunc(CloseDelay, func() {
+		if !w.IsDestroyed() {
+			w.Close()
+		}
+	})
 }
 
 // Window 返回当前的启动窗口（没有时为 nil）。

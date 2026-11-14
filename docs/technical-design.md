@@ -280,7 +280,7 @@ func showIfIdle() {
 - 两个按钮调用 `Start.newDocument()` → `docs.New()`、`Start.open()` → `docs.OpenDialog()`；这两个方法检查调用者必须是启动窗口。取消打开对话框时什么都不做，启动窗口保留。
 - 拖入文件：`win.OnFileDrop` → 筛出 Markdown 扩展名和 `.txt` → 逐个 `docs.Open(path)`。
 - 启动窗口里的 ⌘N / ⌘O 走菜单的 `RoleNew` / `RoleOpen`，与按钮效果相同。
-- **关闭启动窗口**：`newDocWindow` 在文档窗口**创建之后**调用 `start.Close()`，因此 Windows/Linux 上不会出现瞬间“没有窗口”而触发退出。不能放在 `App.OnWindowCreated` 里做：那个事件在 mygo 把窗口登记到文档之前触发，`docs.ForWindow(w)` 还是 `nil`。
+- **关闭启动窗口**：`newDocWindow` 在文档窗口**创建之后**调用 `start.Close()`，因此 Windows/Linux 上不会出现瞬间“没有窗口”而触发退出。不能放在 `App.OnWindowCreated` 里做：那个事件在 mygo 把窗口登记到文档之前触发，`docs.ForWindow(w)` 还是 `nil`。`start.Close()` 先隐藏启动窗口，`CloseDelay`（1 秒）后再真正关闭：拖入文件时文档窗口是在页面 drop 事件中打开的，立刻销毁启动窗口的 WKWebView 会让 WebKit 的拖放回调访问已销毁的页面而崩溃（macOS 27 实测，应用 exit(2) 退出）。
 - 用户关闭启动窗口：macOS 应用留在 Dock（mygo 已为文档应用把 `OnWindowAllClosed` 设为空操作）；Windows/Linux 上没有其他窗口时由 mygo 默认行为退出。
 
 ### 3.4 绑定服务（页面能调用的全部 Go 接口）
