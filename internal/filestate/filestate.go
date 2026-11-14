@@ -41,6 +41,8 @@ type Store struct {
 	path    string
 	clock   int64
 	entries map[string]*entry
+	// writeMu 让快照按取得的先后落盘：持有它时才取快照并写文件，最新的快照一定最后写入。
+	writeMu sync.Mutex
 }
 
 // Key 把文件路径规范化为键。
@@ -103,6 +105,8 @@ func (s *Store) evict() {
 }
 
 func (s *Store) save() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	b, err := json.Marshal(s.entries)
 	path := s.path

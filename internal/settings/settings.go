@@ -116,6 +116,8 @@ type Store struct {
 	mu   sync.Mutex
 	path string
 	cur  Settings
+	// writeMu 让写盘按改动的先后进行：持有它时才改 cur 并写文件，后改的设置一定最后落盘。
+	writeMu sync.Mutex
 	// AutosaveAtLaunch 是启动时的自动保存设置（D11）。
 	AutosaveAtLaunch bool
 }
@@ -142,6 +144,8 @@ func (st *Store) Get() Settings {
 // Set 保存设置并返回规范化后的值。
 func (st *Store) Set(s Settings) (Settings, error) {
 	s = s.Normalize()
+	st.writeMu.Lock()
+	defer st.writeMu.Unlock()
 	st.mu.Lock()
 	st.cur = s
 	path := st.path

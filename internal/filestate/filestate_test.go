@@ -2,6 +2,7 @@ package filestate
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -53,5 +54,25 @@ func TestWindowStates(t *testing.T) {
 	s.SaveWindowStates(map[string]mygo.WindowState{})
 	if got, _ := s.LoadWindowStates(); len(got) != 0 {
 		t.Fatal("ClearWindowStates 应清空")
+	}
+}
+
+// 并发保存时，最后落盘的必须是最新的快照：重新打开后每个文件的状态都在。
+func TestConcurrentSetKeepsNewestOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	s := Open(dir)
+	var wg sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.Set(fmt.Sprintf("/f/%d.md", i), FileState{Mode: "source"}); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := Open(dir).Len(); n != 64 {
+		t.Fatalf("磁盘上只有 %d 个文件的状态，较早的快照覆盖了较新的", n)
 	}
 }
