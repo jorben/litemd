@@ -755,3 +755,5 @@ CI：PR 上跑 Go 测试、前端类型检查、lint、单元测试和保真回�
 | 3.4 节：Session 服务 | 增加 `state`、`saveAs`、`duplicate`；新增 `Export.choosePath/writeChosen`（只能写对话框选择的路径）、`Shell.readClipboardText` | 页面启动取文档状态；vmark 图表导出、粘贴为 Markdown 需要 |
 | 3.2 节：MdContent 只记主要换行符 | 混合换行（CRLF 与 LF 并存）的文件另记每行原换行符；写回时按行对比原文（前后缀 + LCS），未改动的行与被改写的行沿用原换行符，新增行用主要换行符 | v1 回归发现：混合换行文件改一处会把全文换行统一，违反 D3（`internal/doc/corpus_test.go`） |
 | 6.3 节第 6 步：推送后不重新解析 | M1 曾按新文本重新解析建基线；v1 改回原设计：改写的单元并成一个、其后单元平移偏移与下标，与新文本逐字节核对，对不上时才重新解析。页面防抖计时只取文档大小，不再每次按键序列化全文 | 1 MB 文档所见即所得每次按键约 1 s（NF2，v1 性能测量发现），修复后 P95 约 13 ms；平移后的输出不会像重新解析那样重排未改动的表格（`test/fidelity/commit.test.ts`） |
+| 原型 `.md table`：表格最宽到正文宽度 | vmark 表格样式为 `width: max-content`，LiteMd 外壳覆盖为 `width: auto; max-width: 100%`、单元格 `overflow-wrap: anywhere`（`frontend/src/shell/shell.css`，导出 HTML 同） | 与原型一致；多数表格不再成为横向滚动区，100 KB 文档窗口的图形内存 92 → 41 MB（NF3，v1 性能测量发现） |
+| PRD F6.7：缺失图片显示原始路径 | vmark 只在悬停提示里给出路径；`showMediaError` 在容器上记 `data-lm-missing`，外壳用 `::after` 显示在占位下方（块级图片；行内图片仍只有悬停提示） | 满足 F6.7（`scripts/smoke-macos.sh`） |

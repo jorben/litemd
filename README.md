@@ -18,7 +18,7 @@
 <p align="center"><a href="#english">English</a></p>
 
 <p align="center">
-  <img src="docs/images/screenshot.png" width="760" alt="LiteMd：所见即所得编辑一份带公式、图片和提示块的文档">
+  <img src="docs/images/screenshot.png" width="760" alt="LiteMd：所见即所得模式下的一份带表格、提示块、公式、Mermaid 图和任务列表的文档">
 </p>
 
 ## 为什么用 LiteMd

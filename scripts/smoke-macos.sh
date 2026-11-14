@@ -25,7 +25,7 @@ stop() { pkill -f "$APP"; sleep 0.8; }
 cp "$ROOT/testdata/fidelity/mygo-docs-zh/README.md" "$D/a.md"; cp "$D/a.md" "$D/a.orig"
 printf '# B\n\n正文\n' > "$D/b.md"
 printf '# 只读\n' > "$D/ro.md"; chmod 444 "$D/ro.md"
-printf '# 缺图\n\n![丢失](assets/none.png)\n' > "$D/img.md"
+printf '# 缺图\n\n![丢失](assets/none.png)\n' > "$D/img.md"; cp "$D/img.md" "$D/img.orig"
 stop
 
 # 1 双击打开（以 open 模拟访达）、打开不改文件
@@ -59,8 +59,9 @@ case "$b$st" in *readonly*|*只读*) ok "只读文件以只读打开并有标记
 
 # 6 缺失图片：占位并显示原路径，不报错
 "$APP" "$D/img.md" >/dev/null 2>&1; sel img.md; sleep 1
-r=$(ev '(() => { const r = document.querySelector(".lm-rich"); return JSON.stringify({ text: r.innerText.includes("assets/none.png"), img: r.querySelectorAll("img, [data-type=image], .image-error, [class*=broken], [class*=missing]").length }); })()')
-case "$r" in *'"img":0'*) no "缺失图片" "$r" ;; *) ok "缺失图片显示占位 $r" ;; esac
+r=$(ev '(() => { const f = document.querySelector(".lm-rich .image-error[data-lm-missing]"); return f ? f.dataset.lmMissing + " " + getComputedStyle(f, "::after").content : "none"; })()')
+case "$r" in *'assets/none.png "assets/none.png"'*) ok "缺失图片显示占位与原始路径" ;; *) no "缺失图片" "$r" ;; esac
+cmp -s "$D/img.md" "$D/img.orig" || no "缺失图片" "文件被改动"
 
 # 7 图片粘贴：保存到 assets/ 并插入相对路径
 sel a.md
@@ -68,16 +69,21 @@ p=$(ev '(async () => { await window.__litemd.setMode("source"); const png = Uint
 if [ -f "$D/$p" ]; then ok "图片粘贴：保存为 $p 并插入引用"; else no "图片粘贴" "$p"; fi
 sleep 2
 
-# 8 崩溃恢复：未保存的改动在强制结束后恢复
+# 8 崩溃恢复（mygo：自动保存的文件约 1 秒写盘；未命名、冲突中的文档写恢复副本）
 sel a.md
-ev '(async () => { await window.__litemd.setMode("source"); window.__litemd.source().insert("未保存的恢复测试"); return "ok"; })()' >/dev/null
-sleep 0.4; pkill -9 -f "$APP"; sleep 1
-start "$D/a.md"; sel a.md; sleep 1
-b=$(ev 'JSON.stringify(window.__litemd.banners())'); t=$(ev 'window.__litemd.text()')
-case "$b" in *recovered*) case "$t" in *未保存的恢复测试*) ok "崩溃恢复：重开后恢复未保存内容并提示" ;; *) no "崩溃恢复" "文本未恢复" ;; esac ;;
-  *) # 自动保存可能已在强制结束前写盘：此时内容在磁盘上，同样不丢
-    if grep -q 未保存的恢复测试 "$D/a.md"; then ok "崩溃恢复：强制结束前已自动保存，内容在磁盘上"; else no "崩溃恢复" "$b"; fi ;; esac
+ev '(async () => { await window.__litemd.setMode("source"); window.__litemd.source().insert("自动保存后强制结束"); return "ok"; })()' >/dev/null
+ma menu 文件 新建 >/dev/null; sleep 1; sel 未命名
+ev '(async () => { const L = window.__litemd; L.rich.editor.chain().focus().insertContent("未命名恢复测试").run(); await L.sync.push(); return "ok"; })()' >/dev/null
+sleep 2.5; pkill -9 -f "$APP"; sleep 1
+grep -q 自动保存后强制结束 "$D/a.md" && ok "强制结束前已自动保存的编辑在磁盘上" || no "强制结束" "a.md 没有写盘"
+start; sleep 2
+if sel 未命名; then
+  b=$(ev 'JSON.stringify(window.__litemd.banners())'); t=$(ev 'window.__litemd.text()')
+  case "$b$t" in *recovered*未命名恢复测试*) ok "崩溃恢复：重开后恢复未命名文档并提示" ;; *) no "崩溃恢复" "$b $t" ;; esac
+else no "崩溃恢复" "没有恢复出未命名窗口"; fi
+# 清理：丢弃恢复出的未命名文档（「丢弃，载入磁盘版本」），不在用户数据里留下副本
+ev '(() => { const b = [...document.querySelectorAll("button")].find((x) => /丢弃|Discard/.test(x.textContent)); b?.click(); return 1; })()' >/dev/null 2>&1; sleep 1
 stop
 chmod 644 "$D/ro.md"; rm -rf "$D"
-echo "通过 $pass，失败 $fail"
+echo "通过 ${pass}，失败 ${fail}"
 [ "$fail" = 0 ]

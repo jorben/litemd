@@ -51,19 +51,37 @@ def select(title, timeout=15):
     raise SystemExit("timeout " + title)
 
 
-def rss_total():
-    pid = subprocess.run(["pgrep", "-f", APP], capture_output=True, text=True).stdout.split()[0]
-    out = subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,comm="], capture_output=True, text=True).stdout
-    app, web = 0, 0
+WEBKIT = ("WebKit.WebContent", "WebKit.GPU", "WebKit.Networking")
+OTHER_WEBKIT = set()  # 启动 LiteMd 之前就存在的 WebKit 进程（其他应用的），不计入
+
+
+def webkit_pids():
+    out = subprocess.run(["ps", "-axo", "pid=,comm="], capture_output=True, text=True).stdout
+    return {l.split(None, 1)[0] for l in out.splitlines() if any(k in l for k in WEBKIT)}
+
+
+def footprint_mb(pid):
+    out = subprocess.run(["footprint", pid], capture_output=True, text=True).stdout
     for l in out.splitlines():
-        f = l.split(None, 3)
-        if len(f) < 4:
-            continue
-        if f[0] == pid:
-            app = int(f[2])
-        elif "WebKit.WebContent" in f[3] or "WebKit.GPU" in f[3] or "WebKit.Networking" in f[3]:
-            web += int(f[2])
-    return app / 1024, web / 1024
+        if "Footprint:" in l:
+            v, unit = l.split("Footprint:")[1].split()[:2]
+            return float(v) * {"KB": 1 / 1024, "MB": 1, "GB": 1024}.get(unit, 1)
+    return 0.0
+
+
+def rss_total():
+    """(应用 RSS, WebKit RSS, 应用 footprint, WebKit footprint)，单位 MB；只算 LiteMd 的 WebKit 进程。"""
+    pid = subprocess.run(["pgrep", "-f", APP], capture_output=True, text=True).stdout.split()[0]
+    mine = webkit_pids() - OTHER_WEBKIT
+    out = subprocess.run(["ps", "-axo", "pid=,rss="], capture_output=True, text=True).stdout
+    rss = {l.split()[0]: int(l.split()[1]) / 1024 for l in out.splitlines() if len(l.split()) == 2}
+    return rss.get(pid, 0), sum(rss.get(p, 0) for p in mine), footprint_mb(pid), sum(footprint_mb(p) for p in mine)
+
+
+def mem(n):
+    a, w, fa, fw = rss_total()
+    return {"rss_app": round(a), "rss_webkit": round(w), "footprint_app": round(fa), "footprint_webkit": round(fw),
+            "footprint_per_window": round((fa + fw) / n), "rss_per_window": round((a + w) / n)}
 
 
 def cpu_idle(seconds=5):
@@ -99,6 +117,8 @@ big = make_doc("doc1m.md", 1_000_000)
 others = [make_doc(f"doc100k-{i}.md", 100_000) for i in range(5)]
 
 # NF1 冷启动（5 次取中位数），预览模式
+stop()
+OTHER_WEBKIT |= webkit_pids()
 cold = []
 for k in range(5):
     stop()
@@ -115,18 +135,27 @@ for k in range(5):
     cold.append(round(select("doc100k.md") - t0))
 res["cold_start_ms"] = {"runs": sorted(cold), "median": statistics.median(cold)}
 
-# NF1 已运行时打开新文件（第二实例启动并转发给第一实例）
+# NF1 已运行时打开新文件（第二实例启动并转发给第一实例）。每次之前空闲 3 秒：
+# 连续打开时前一个窗口还在渲染（Mermaid、KaTeX），测到的是排队时间；连续打开另记一组
 warm = []
-for p in others:
+for p in others[:3]:
+    time.sleep(3)
     t0 = time.time() * 1000
     subprocess.run([APP, p])
     warm.append(round(select(os.path.basename(p)) - t0))
 res["open_running_ms"] = {"runs": sorted(warm), "median": statistics.median(warm)}
+burst = []
+for p in others[3:]:
+    t0 = time.time() * 1000
+    subprocess.run([APP, p])
+    burst.append(round(select(os.path.basename(p)) - t0))
+res["open_running_back_to_back_ms"] = sorted(burst)
 
-# NF3 6 个窗口的内存与空闲 CPU
+# NF3 6 个窗口的内存与空闲 CPU（等渲染结束、WebKit 回收后再采样）
 time.sleep(3)
-a, w = rss_total()
-res["rss_6_windows_mb"] = {"app": round(a), "webkit": round(w), "per_window": round((a + w) / 6)}
+res["mem_6_windows_after_3s_mb"] = mem(6)
+time.sleep(12)
+res["mem_6_windows_mb"] = mem(6)
 res["idle_cpu_percent"] = cpu_idle()
 
 # NF2 1 MB 文档：打开（预览）、所见即所得与源码输入、写回
@@ -137,9 +166,8 @@ res["type_1mb_wysiwyg_ms"] = json.loads(ma("eval", TYPE_WYSIWYG))
 res["push_1mb_wysiwyg_ms"] = round(float(ma("eval", PUSH)), 1)
 res["type_1mb_source_ms"] = json.loads(ma("eval", TYPE_SOURCE))
 res["push_1mb_source_ms"] = round(float(ma("eval", PUSH)), 1)
-time.sleep(2)
-a, w = rss_total()
-res["rss_7_windows_mb"] = {"app": round(a), "webkit": round(w)}
+time.sleep(5)
+res["mem_7_windows_incl_1mb_mb"] = mem(7)
 
 # NF4 安装包
 res["app_bundle"] = subprocess.run(["du", "-sh", os.path.dirname(os.path.dirname(os.path.dirname(APP)))], capture_output=True, text=True).stdout.split()[0]
