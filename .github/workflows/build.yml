@@ -18,12 +18,12 @@
 #
 # 仓库 secrets（Settings > Secrets and variables > Actions）：
 #   MYGO_UPDATER_PRIVATE_KEY    更新签名私钥，即 mygo keygen 生成的 mygo-update.key 的内容
-#   MACOS_CERTIFICATE           Developer ID Application .p12（含私钥）的 base64
-#   MACOS_CERTIFICATE_PASSWORD  .p12 的密码
-#   MACOS_SIGNING_IDENTITY      签名身份，如 "Developer ID Application: Name (TEAMID)"
+#   APPLE_CERTIFICATE           Developer ID Application .p12（含私钥）的 base64
+#   APPLE_CERTIFICATE_PASSWORD  .p12 的密码
 #   APPLE_ID                    用于公证的 Apple ID
 #   APPLE_TEAM_ID               Apple Developer Team ID
-#   APPLE_APP_PASSWORD          该 Apple ID 的 App 专用密码
+#   APPLE_APP_SPECIFIC_PASSWORD 该 Apple ID 的 App 专用密码
+# 签名身份（"Developer ID Application: Name (TEAMID)"）不单独配置，导入证书后从钥匙串里读出。
 name: Build and Release
 
 on:
@@ -246,15 +246,14 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD MACOS_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
             [ -n "${!name}" ] || { echo "::error::missing signing secret $name"; exit 1; }
           done
           keychain="$RUNNER_TEMP/signing.keychain-db"
@@ -263,17 +262,26 @@ jobs:
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
           security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
-            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/certificate.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain" login.keychain
+          # 签名身份从刚导入的证书里取，只认 Team ID 一致的 Developer ID Application
+          identity="$(security find-identity -v -p codesigning "$keychain" \
+            | sed -n 's/.*"\(Developer ID Application: .* ('"$APPLE_TEAM_ID"')\)"$/\1/p' | head -n 1)"
+          [ -n "$identity" ] || {
+            echo "::error::no Developer ID Application identity for team $APPLE_TEAM_ID in APPLE_CERTIFICATE"
+            security find-identity -v -p codesigning "$keychain"
+            exit 1
+          }
+          echo "Signing identity: $identity"
           xcrun notarytool store-credentials notary --keychain "$keychain" \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
           # mygo.config.ts 读这两个变量：有 NOTARY_KEYCHAIN 才公证，签名身份取 MACOS_SIGNING_IDENTITY。
           echo "NOTARY_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-          echo "MACOS_SIGNING_IDENTITY=$MACOS_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Build, sign and upload
         env:
