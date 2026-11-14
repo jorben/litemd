@@ -324,10 +324,12 @@ Windows：     http://lmasset.localhost/<docToken>/<url-encoded-ref>   （WebVie
   - **只提供图片类文件**：按扩展名和文件头嗅探双重判断，限 png/jpg/gif/webp/avif/bmp/ico/svg；
   - **不限于文档目录及其子目录**（NF5）。Markdown 里常见 `../images/x.png` 这种写法，限死子目录会让大量文档显示不了图。代价是被攻破的页面能读到机器上任意位置的**图片**，但读不到其他类型的文件；
   - SVG 返回时附加 `Content-Security-Policy: script-src 'none'`；
+  - Windows 上**文档所在共享之外的 UNC 路径**（`\\server\share\…`，来自 `//server/…`、`file://server/…` 等写法）不访问文件系统直接返回 404：打开它会连接远程主机，SMB 自动发送当前用户的 NTLM 凭据，关闭“加载网络图片”也拦不住。文档本身在网络共享上时，同一共享（卷 `\\server\share` 相同）里的图片照常显示；
   - 文件不存在返回 404，页面显示占位和原始路径（F6.7）。
 - **网络图片（F6.2）**：
   - 开启时由页面直接加载。
   - 关闭时，页面启动阶段在 CSP 中去掉 `http:`、`https:`（第 7 节），这是硬性保证：原始 HTML、行内样式里的 `url()` 也加载不了。页面同时把 `http(s)` 图片换成占位。用户点击单张图片时调用 `Assets.fetchImage(url)`：只接受 `http(s)`；解析后的地址是回环、内网、链路本地地址时拒绝；响应必须是图片 MIME 类型，上限 20 MB；页面拿到字节后用 `blob:` URL 显示。
+  - 关闭时的导出：PDF 和打印同样不加载网络图片。页面生成导出 HTML 时去掉网络图片的地址，改为显示替代文字（没有替代文字时显示原地址），并换用不含 `http:`、`https:` 的离线 CSP；Go 在隐藏窗口载入前也在最前面加上同一条 CSP（多条 CSP 取交集，页面送来的 HTML 无法放宽，见第 7 节）。用户单独点开过的图片是 `blob:`，照常内嵌。导出的 HTML 文件保留网络图片的原地址：它之后由用户的浏览器打开，不是本应用的网络请求。
   - 设置改动后对新打开的窗口生效；已打开的窗口在提示条中提供「重新载入」（先收齐，再重新载入页面）。
 
 ### 3.6 菜单与快捷键
@@ -583,9 +585,9 @@ LiteMd 的文档页面是 mygo 意义上的“受信任页面”（可以调用�
 | 权限 | `SetPermissionHandler` 一律拒绝（摄像头、麦克风、定位、通知）：受信任页面在 mygo 中默认不经询问就能获得这些权限 |
 | 后端接口 | 绑定的方法很少，并且都按调用者窗口限定作用域：不提供“按任意路径读写”的接口；图片协议只提供图片类文件；写盘只发生在文档本身、文档目录下的 assets 目录、用户在保存对话框里选的路径 |
 | 拖入路径 | 页面传给 `Assets.importDropped` 的路径必须在本窗口最近一次 `OnFileDrop` 登记的集合里（Go 侧在 `OnFileDrop` 中记录，几秒后过期），被攻破的页面不能借此复制任意文件 |
-| 本地链接 | `Links.open` 打开非 Markdown 的本地文件前，确认框显示**完整路径**；可执行文件一律拒绝打开：`.app` `.exe` `.bat` `.cmd` `.com` `.msi` `.ps1` `.vbs` `.lnk` `.url` `.scr` `.sh` `.command` `.tool` `.scpt` `.jar` `.desktop` `.appimage`，以及 Unix 上带可执行权限的文件和目录 |
+| 本地链接 | `Links.open` 打开非 Markdown 的本地文件前，确认框显示**完整路径**；可执行文件一律拒绝打开：`.app` `.exe` `.bat` `.cmd` `.com` `.msi` `.ps1` `.vbs` `.lnk` `.url` `.scr` `.sh` `.command` `.tool` `.scpt` `.jar` `.desktop` `.appimage`，以及 Unix 上带可执行权限的文件和目录。Windows 上文档所在共享之外的 UNC 路径（第 3.5 节）只按扩展名判断，确认前不访问文件系统（Markdown 链接也先确认），用户确认后才检查是否存在、是否是目录；`Shell.revealInFolder` 同样先确认 |
 | 网络图片单张加载 | `Assets.fetchImage` 只接受 `http(s)`，拒绝回环、内网、链路本地地址（防止借应用访问本机服务），只返回图片类型，上限 20 MB |
-| 导出与打印 | 导出 HTML 经过同样的过滤，不含任何脚本，文件内设 `default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'; font-src data:`。PDF 和打印：Go 把导出 HTML 处理成自包含的（本地图片转 base64、KaTeX 字体内嵌、Mermaid 已渲染成 SVG），在一个隐藏窗口中以 `PageOptions{Untrusted: true}` 载入后调用 `PrintToPDF` / `Print`。**必须设 `Untrusted`**：mygo 把不带 base URL 的 `LoadHTML`（`about:blank`）视为应用自己的受信任页面，可以调用全部绑定方法 |
+| 导出与打印 | 导出 HTML 经过同样的过滤，不含任何脚本，文件内设 `default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'; font-src data:`。PDF 和打印：Go 把导出 HTML 处理成自包含的（本地图片转 base64、KaTeX 字体内嵌、Mermaid 已渲染成 SVG），在一个隐藏窗口中以 `PageOptions{Untrusted: true}` 载入后调用 `PrintToPDF` / `Print`。**必须设 `Untrusted`**：mygo 把不带 base URL 的 `LoadHTML`（`about:blank`）视为应用自己的受信任页面，可以调用全部绑定方法。关闭“加载网络图片”时，PDF 和打印改用离线 CSP `default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:`（不含 `http:`、`https:`，Go 载入前也在最前面加上同一条），网络图片换成替代文字或原地址；导出的 HTML 文件仍保留网络图片的原地址（第 3.5 节） |
 | 网络 | 除检查更新和网络图片（都可关闭）外，没有任何网络请求；不加载远程字体和脚本，所有资源都打包在本地 |
 
 ## 8. 前端设计

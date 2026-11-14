@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/jorben/litemd/internal/doc"
+	"github.com/jorben/litemd/internal/settings"
 )
 
 // ChosenTTL 是登记路径的有效期。
@@ -99,6 +100,27 @@ func (Service) WriteChosen(ctx context.Context, path string, data []byte) error 
 // 打印：mygo 把不带 base URL 的 LoadHTML 视为应用自己的受信任页面，必须设 Untrusted，
 // 导出页面不能调用任何 Go 方法。
 
+// offlineCSP 是关闭“加载网络图片”时 PDF 与打印页面的 CSP：不含 http(s)（技术方案 3.5、7 节的硬性保证）。
+// 与前端 exportHtml.ts 的 EXPORT_CSP_OFFLINE 一致。
+const offlineCSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+
+// renderHTML 是隐藏窗口实际载入的 HTML。关闭网络图片时，不论页面送来的 HTML 里有什么，都在最前面
+// （doctype 之后，保持标准模式）加一条不含 http(s) 的 CSP：它先于任何元素生效，多条 CSP 取交集，
+// 页面送来的 CSP 无法放宽它。
+func renderHTML(html string, loadNetworkImages bool) string {
+	if loadNetworkImages {
+		return html
+	}
+	meta := `<meta http-equiv="Content-Security-Policy" content="` + offlineCSP + `">`
+	rest := strings.TrimLeft(html, " \t\r\n\f")
+	if len(rest) >= len("<!doctype") && strings.EqualFold(rest[:len("<!doctype")], "<!doctype") {
+		if i := strings.IndexByte(rest, '>'); i >= 0 {
+			return rest[:i+1] + meta + rest[i+1:]
+		}
+	}
+	return meta + html
+}
+
 // ErrTimeout：导出页面没有在限定时间内载入。
 var ErrTimeout = errors.New("export: 导出页面载入超时")
 
@@ -125,6 +147,7 @@ func (Service) HTML(ctx context.Context, html, defaultName string) (string, erro
 
 // renderHidden 在隐藏的 Untrusted 窗口中载入 html，载入完成后在主线程调用 fn。
 func renderHidden(html string, fn func(*mygo.Window) error) error {
+	html = renderHTML(html, settings.Default.Get().NetworkImages)
 	done := make(chan error, 1)
 	mygo.RunOnMain(func() {
 		w := mygo.NewWindow(mygo.WindowOptions{Hidden: true, Width: 900, Height: 1200, Page: mygo.PageOptions{Untrusted: true}})

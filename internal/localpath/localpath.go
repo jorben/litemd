@@ -4,6 +4,7 @@
 //   - file URL 的路径带盘符：file:///C:/x.png 的 Path 是 /C:/x.png，要去掉开头的 /；
 //     带主机名的 file://server/share/x 是 UNC 路径 \\server\share\x。
 //   - 以 \ 或 / 开头、没有盘符的路径不是绝对路径，而是「当前盘的根」，取所在目录的盘符。
+//   - UNC 路径指向网络位置，文档目录所在共享之外的 UNC 路径不能自动访问（ForeignUNC）。
 package localpath
 
 import (
@@ -41,6 +42,48 @@ func Join(dir, p string) string {
 		return filepath.Clean(filepath.VolumeName(dir) + p)
 	}
 	return filepath.Join(dir, p)
+}
+
+// ForeignUNC 报告 p 是否为 Windows UNC / 设备路径（\\server\share\…、\\?\UNC\…、\\.\…），且它的卷与文档目录 dir
+// 的卷不同。访问这样的路径会连接远程主机（SMB 会自动发送当前用户的 NTLM 凭据），所以文档引用它时
+// 不能自动访问：图片一律拒绝，链接先确认再访问。同一共享里的文档（dir 也在该卷上）照常使用。
+// p 应是 Join 清理过的路径。其他系统没有 UNC 路径，总是返回 false。
+func ForeignUNC(dir, p string) bool {
+	return runtime.GOOS == "windows" && foreignUNC(dir, p)
+}
+
+func foreignUNC(dir, p string) bool {
+	v := uncVolume(p)
+	return v != "" && !strings.EqualFold(v, uncVolume(dir))
+}
+
+// uncVolume 按 Windows 规则返回 p 的 UNC / 设备卷（分隔符统一为 \）：\\server\share、\\?\UNC\server\share、
+// \\?\C: 等；p 不以两个分隔符或 \??\ 开头时返回 ""。纯字符串处理，任何系统上结果相同，便于测试。
+func uncVolume(p string) string {
+	p = strings.ReplaceAll(p, "/", `\`)
+	var prefix, rest string
+	parts := 2 // 卷包含的路径段数：server、share
+	switch {
+	case hasPrefixFold(p, `\\.\`), hasPrefixFold(p, `\\?\`), hasPrefixFold(p, `\??\`):
+		prefix, rest = p[:4], p[4:]
+		parts = 1 // 设备名或盘符
+		if first, _, _ := strings.Cut(rest, `\`); strings.EqualFold(first, "UNC") {
+			parts = 3 // UNC、server、share
+		}
+	case strings.HasPrefix(p, `\\`):
+		prefix, rest = p[:2], p[2:]
+	default:
+		return ""
+	}
+	seg := strings.SplitN(rest, `\`, parts+1)
+	if len(seg) > parts {
+		seg = seg[:parts]
+	}
+	return prefix + strings.Join(seg, `\`)
+}
+
+func hasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
 
 func isLetter(c byte) bool {

@@ -6,6 +6,11 @@ import { computeCoreColorVars, computeModeColorVars } from "@/theme/legacyModeCo
 import { themeTokensToColors } from "@/theme/themeColorsAdapter";
 
 export const EXPORT_CSP = "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'; font-src data:";
+/**
+ * 关闭「加载网络图片」时 PDF 与打印用的 CSP：不含 http(s)（技术方案 3.5、7 节的硬性保证）。
+ * 与 internal/export 的 offlineCSP 保持一致。
+ */
+export const EXPORT_CSP_OFFLINE = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:";
 
 /** 编辑界面才有的元素（代码块工具条、复制按钮、表格操作、拖拽手柄等）。 */
 const UI_SELECTORS = [
@@ -83,8 +88,13 @@ export interface ExportOptions {
   title: string;
   /** 本地图片内联为 data:（F8.1 默认）；false 时保留原始相对路径 */
   embedImages: boolean;
-  /** 原始引用（img 的 data-src / alt 之外的 Markdown 地址），由调用方提供 */
+  /** 原始引用（img 的 data-src / alt 之外的 Markdown 地址），由调用方提供；本地图片返回非空 */
   originalSrc?: (img: HTMLImageElement) => string | null;
+  /**
+   * 不加载网络图片（关闭「加载网络图片」时的 PDF 与打印）：CSP 去掉 http(s)，网络图片换成占位（去掉地址，
+   * 显示替代文字；没有替代文字时显示原地址）。用户单独点开过的图片是 blob:，照常内嵌。
+   */
+  blockRemoteImages?: boolean;
 }
 
 /** 生成自包含 HTML。 */
@@ -92,6 +102,12 @@ export async function buildExportHtml(root: HTMLElement, o: ExportOptions): Prom
   const c = cleanClone(root);
   for (const img of [...c.querySelectorAll("img")]) {
     const src = img.getAttribute("src") ?? "";
+    if (o.blockRemoteImages && /^\s*https?:/i.test(src) && !o.originalSrc?.(img)) {
+      img.removeAttribute("src");
+      img.removeAttribute("srcset");
+      if (!img.getAttribute("alt")) img.setAttribute("alt", src.trim());
+      continue;
+    }
     if (!o.embedImages) {
       const orig = o.originalSrc?.(img);
       if (orig) img.setAttribute("src", orig);
@@ -107,7 +123,7 @@ export async function buildExportHtml(root: HTMLElement, o: ExportOptions): Prom
 <html lang="${document.documentElement.lang || "zh-CN"}">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">
+<meta http-equiv="Content-Security-Policy" content="${o.blockRemoteImages ? EXPORT_CSP_OFFLINE : EXPORT_CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="LiteMd">
 <title>${esc(o.title)}</title>

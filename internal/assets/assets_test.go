@@ -73,6 +73,30 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+// Windows：文档所在共享之外的 UNC 路径不解析（不连接远程主机），同一共享里的照常解析。
+// 卷的判断见 localpath.TestForeignUNC（任何系统都跑）。
+func TestResolveUNC(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UNC 路径只在 Windows 上存在")
+	}
+	cases := []struct{ dir, ref, want string }{
+		{`\\srv\share\docs`, "img/a.png", `\\srv\share\docs\img\a.png`},
+		{`\\srv\share\docs`, "//srv/share/b.png", `\\srv\share\b.png`},
+		{`\\srv\share\docs`, "file://srv/share/b.png", `\\srv\share\b.png`},
+		{`\\srv\share\docs`, "//evil.example/s/x.png", ""},
+		{`C:\docs`, "//evil.example/s/x.png", ""},
+		{`C:\docs`, `\\evil.example\s\x.png`, ""},
+		{`C:\docs`, "file://evil.example/s/x.png", ""},
+		{`C:\docs`, "file:////evil.example/s/x.png", ""},
+		{"", "//evil.example/s/x.png", ""},
+	}
+	for _, c := range cases {
+		if got := Resolve(c.dir, c.ref); got != c.want {
+			t.Errorf("Resolve(%q, %q) = %q, want %q", c.dir, c.ref, got, c.want)
+		}
+	}
+}
+
 func TestSaveImage(t *testing.T) {
 	dir := t.TempDir()
 	doc := filepath.Join(dir, "notes.md")
@@ -169,5 +193,83 @@ func TestDropRegistry(t *testing.T) {
 	clock = clock.Add(DropTTL + time.Second)
 	if wasDropped(w1, "/x/c.png") {
 		t.Fatal("过期后失效")
+	}
+}
+
+// 拖入的 SVG / ICO 没有 DetectExt 认得的文件头：按原扩展名核对内容后沿用原扩展名。
+func TestSaveDroppedImage(t *testing.T) {
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "notes.md")
+	now := time.Date(2026, 11, 14, 2, 15, 30, 0, time.UTC)
+	svg := []byte("<svg xmlns='http://www.w3.org/2000/svg'/>")
+	ico := []byte{0, 0, 1, 0, 1, 0, 16, 16}
+	cases := []struct {
+		ext  string
+		data []byte
+		want string // 扩展名；空表示 ErrNotImage
+	}{
+		{".svg", svg, ".svg"},
+		{".SVG", svg, ".svg"},
+		{".ico", ico, ".ico"},
+		{".ico", png, ".png"},                       // 内容是位图：按文件头
+		{".svg", []byte("<html><script>"), ""},      // 内容不是 SVG
+		{".png", ico, ""},                           // 只有 SVG / ICO 按原扩展名核对
+		{".ico", []byte("#!/bin/sh\nrm -rf /"), ""}, // 伪装成图标的脚本
+	}
+	for _, c := range cases {
+		rel, err := SaveDroppedImage(doc, c.ext, c.data, now, Rule{Kind: "assets"})
+		if c.want == "" {
+			if !errors.Is(err, ErrNotImage) {
+				t.Errorf("SaveDroppedImage(%s, %q) = %q %v, want ErrNotImage", c.ext, c.data, rel, err)
+			}
+			continue
+		}
+		if err != nil || filepath.Ext(rel) != c.want {
+			t.Errorf("SaveDroppedImage(%s, %q) = %q %v, want *%s", c.ext, c.data, rel, err, c.want)
+			continue
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))); string(b) != string(c.data) {
+			t.Errorf("%s: 写入内容不对", rel)
+		}
+	}
+	if _, err := SaveImage(doc, svg, now, Rule{}); !errors.Is(err, ErrNotImage) {
+		t.Fatalf("粘贴的数据没有扩展名，SVG 不能落盘: %v", err)
+	}
+}
+
+// 拖入一批文件时，一张坏图片不影响其他文件：它的结果为空字符串。
+func TestImportDroppedSkipsBadImage(t *testing.T) {
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "notes.md")
+	write := func(name string, data []byte) string {
+		p := filepath.Join(dir, "in", name)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	good := write("a.png", png)
+	bad := write("b.png", []byte("not an image"))
+	icon := write("c.ico", []byte{0, 0, 1, 0, 1, 0})
+	pdf := write("d.pdf", []byte("%PDF"))
+	missing := filepath.Join(dir, "in", "gone.svg")
+	paths := []string{good, bad, icon, missing, pdf}
+	w := "win"
+	recordDrop(w, paths)
+	defer func() { dropMu.Lock(); delete(drops, w); dropMu.Unlock() }()
+	out, err := importDropped(w, doc, paths)
+	if err != nil || len(out) != len(paths) {
+		t.Fatalf("%q %v", out, err)
+	}
+	if !strings.HasPrefix(out[0], "assets/image-") || !strings.HasSuffix(out[0], ".png") ||
+		out[1] != "" || !strings.HasSuffix(out[2], ".ico") || out[3] != "" || out[4] != "in/d.pdf" {
+		t.Fatalf("%q", out)
+	}
+	if _, err := importDropped(w, "", []string{good}); !errors.Is(err, ErrNeedSave) {
+		t.Fatalf("未命名文档: %v", err)
+	}
+	if _, err := importDropped(w, doc, []string{good, filepath.Join(dir, "other.png")}); !errors.Is(err, ErrNotDropped) {
+		t.Fatalf("未拖入的路径: %v", err)
 	}
 }

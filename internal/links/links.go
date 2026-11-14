@@ -40,7 +40,8 @@ var execExt = map[string]bool{
 }
 
 // Classify 把链接分类并解析出目标（本地文件为绝对路径）。dir 是文档所在目录（未命名文档为空）。
-// isExecFile 用于检查 Unix 可执行权限和目录，便于测试注入。
+// isExecFile 用于检查 Unix 可执行权限和目录，便于测试注入。文档所在共享之外的 Windows UNC 路径
+// 只按扩展名分类，不调用 isExecFile（不访问远程主机），Open 在用户确认后再检查。
 func Classify(href, dir string, isExecFile func(string) bool) (Kind, string) {
 	href = strings.TrimSpace(href)
 	if href == "" {
@@ -59,7 +60,7 @@ func Classify(href, dir string, isExecFile func(string) bool) (Kind, string) {
 	case "file":
 		href = localpath.FromFileURL(u)
 	case "":
-		p, err := url.PathUnescape(u.Path)
+		p, err := url.PathUnescape(schemelessPath(u))
 		if err != nil {
 			return Invalid, ""
 		}
@@ -80,10 +81,21 @@ func Classify(href, dir string, isExecFile func(string) bool) (Kind, string) {
 		return Executable, p
 	case markdownExt[ext]:
 		return Markdown, p
+	case localpath.ForeignUNC(dir, p):
+		return LocalFile, p
 	case isExecFile(p):
 		return Executable, p
 	}
 	return LocalFile, p
+}
+
+// schemelessPath 返回没有协议的链接的路径部分。url.Parse 把 //host/share/x 的 host 放进 Host，这里拼回去，
+// 与图片（assets.Resolve）一样当作 UNC 路径（技术方案 3.5 节），否则 Join 会把它当成「当前盘的根」丢掉主机。
+func schemelessPath(u *url.URL) string {
+	if u.Host != "" {
+		return "//" + u.Host + u.Path
+	}
+	return u.Path
 }
 
 // IsExecFile 报告路径是目录或带可执行权限的文件（Unix）。
@@ -120,6 +132,9 @@ func (Service) Open(ctx context.Context, href string) error {
 		dir = filepath.Dir(p)
 	}
 	kind, target := Classify(href, dir, IsExecFile)
+	if (kind == Markdown || kind == LocalFile) && localpath.ForeignUNC(dir, target) {
+		return openForeignUNC(w, kind, target)
+	}
 	switch kind {
 	case External:
 		return mygo.Shell.OpenExternal(target)
@@ -139,12 +154,35 @@ func (Service) Open(ctx context.Context, href string) error {
 		}
 		return mygo.Shell.OpenPath(target)
 	case Executable:
-		message(w, mygo.MessageWarning, l10n.T("LiteMd 不会打开可执行文件"), l10n.F("为了安全，文档中指向程序或脚本的链接不会被打开：\n%s", target), []string{l10n.T("好")})
-		return ErrRefused
+		return refuseExecutable(w, target)
 	case Anchor:
 		return nil
 	}
 	return ErrInvalid
+}
+
+// openForeignUNC 打开文档所在共享之外的 Windows UNC 路径：访问它会连接远程主机并发送 NTLM 凭据，
+// 所以先显示完整路径请用户确认，确认前不访问文件系统；确认后再做本地文件的那些检查。
+func openForeignUNC(w *mygo.Window, kind Kind, target string) error {
+	if message(w, mygo.MessageQuestion, l10n.T("要打开网络位置上的这个文件吗？"), target, []string{l10n.T("打开"), l10n.T("取消")}) != 0 {
+		return nil
+	}
+	if _, err := os.Stat(target); err != nil {
+		message(w, mygo.MessageWarning, l10n.F("找不到「%s」", filepath.Base(target)), target, []string{l10n.T("好")})
+		return ErrNotFound
+	}
+	if kind == Markdown {
+		return session.OpenPath(target)
+	}
+	if IsExecFile(target) {
+		return refuseExecutable(w, target)
+	}
+	return mygo.Shell.OpenPath(target)
+}
+
+func refuseExecutable(w *mygo.Window, target string) error {
+	message(w, mygo.MessageWarning, l10n.T("LiteMd 不会打开可执行文件"), l10n.F("为了安全，文档中指向程序或脚本的链接不会被打开：\n%s", target), []string{l10n.T("好")})
+	return ErrRefused
 }
 
 func message(w *mygo.Window, t mygo.MessageType, msg, detail string, buttons []string) int {
@@ -161,7 +199,8 @@ type ShellService struct{}
 
 // RevealInFolder 在访达 / 资源管理器中显示文档本身，或文档引用的文件（ref 为空时为文档）。
 func (ShellService) RevealInFolder(ctx context.Context, ref string) error {
-	d := session.ForWindow(mygo.CallerWindow(ctx))
+	w := mygo.CallerWindow(ctx)
+	d := session.ForWindow(w)
 	if d == nil {
 		return session.ErrNoDocument
 	}
@@ -173,6 +212,11 @@ func (ShellService) RevealInFolder(ctx context.Context, ref string) error {
 		kind, t := Classify(ref, filepath.Dir(p), func(string) bool { return false })
 		if kind != LocalFile && kind != Markdown && kind != Executable {
 			return ErrInvalid
+		}
+		// 文档所在共享之外的 UNC 路径：确认后才访问（见 openForeignUNC）
+		if localpath.ForeignUNC(filepath.Dir(p), t) &&
+			message(w, mygo.MessageQuestion, l10n.T("要显示网络位置上的这个文件吗？"), t, []string{l10n.T("显示"), l10n.T("取消")}) != 0 {
+			return nil
 		}
 		p = t
 	}

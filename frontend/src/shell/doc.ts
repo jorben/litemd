@@ -834,6 +834,9 @@ export async function docPage(app: HTMLElement): Promise<void> {
       const html = await buildExportHtml(root, {
         title,
         embedImages: opts.embed,
+        // 关闭「加载网络图片」时，PDF 与打印不加载网络图片（第 3.5、7 节）。导出的 HTML 文件保留原地址：
+        // 它之后由用户的浏览器打开，不是本应用的网络请求
+        blockRemoteImages: kind !== "html" && !getSettings().networkImages,
         originalSrc: (img) => {
           const s0 = img.getAttribute("src") ?? "";
           return s0.startsWith(base) ? decodeURIComponent(s0.slice(base.length)) : null;
@@ -941,6 +944,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
     try {
       const rels = await Assets.importDropped(paths);
       for (const [i, rel] of rels.entries()) {
+        if (!rel) continue; // 这张图片没有保存（读不了、不是图片或太大），其他文件照常插入
         if (/\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i.test(paths[i]!)) await insertImage(rel);
         else {
           const name = paths[i]!.split(/[\\/]/).pop()!;

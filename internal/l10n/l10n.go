@@ -72,11 +72,15 @@ var en = map[string]string{
 	// 对话框
 	"好": "OK", "取消": "Cancel", "打开": "Open", "设置": "Settings", "另存为 UTF-8": "Save as UTF-8",
 	"将「%s」还原到上次保存的版本？": "Revert “%s” to the last saved version?", "当前未保存的改动会丢失。": "Your unsaved changes will be lost.",
+	"「%s」在磁盘上已被修改": "“%s” changed on disk", "你在这里还有未保存的改动。选择保留哪个版本。": "You have unsaved changes here. Choose which version to keep.",
+	"保留我的版本": "Keep My Version", "载入磁盘版本": "Load Disk Version", "没有保存「%s」": "Couldn't save “%s”",
 	"已安装 litemd 命令": "Installed the litemd command", "之后可以在终端用 litemd 文件.md 打开文件。": "You can now open files from Terminal with litemd file.md.",
 	"没有安装命令行工具":  "The command line tool wasn't installed",
 	"当前版本不能自动更新": "This version can't update itself", "开发版本或安装位置不可写时无法自动更新。": "Development builds, or apps installed where they can't write, can't update automatically.",
 	"检查更新失败": "Couldn't check for updates", "LiteMd 已是最新版本": "LiteMd is up to date", "当前版本 %s": "Current version %s",
 	"找不到「%s」": "Can't find “%s”", "要用默认应用打开这个文件吗？": "Open this file with its default app?",
+	"要打开网络位置上的这个文件吗？": "Open this file from a network location?",
+	"要显示网络位置上的这个文件吗？": "Show this file from a network location?", "显示": "Show",
 	"LiteMd 不会打开可执行文件":             "LiteMd won't open executable files",
 	"为了安全，文档中指向程序或脚本的链接不会被打开：\n%s": "For safety, links to programs or scripts aren't opened:\n%s",
 }

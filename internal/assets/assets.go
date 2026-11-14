@@ -106,7 +106,8 @@ func DetectExt(head []byte) string {
 }
 
 // Resolve 把 Markdown 中的图片引用解析为绝对路径：相对路径按文档目录，支持 file:// 与绝对路径。
-// 返回空字符串表示不是本地文件（如 http）。
+// 返回空字符串表示不是本地文件（如 http），或是文档所在共享之外的 Windows UNC 路径：打开它会连接
+// 远程主机并发送 NTLM 凭据，关闭加载网络图片也拦不住，所以不访问文件系统直接拒绝。
 func Resolve(dir, ref string) string {
 	if ref == "" {
 		return ""
@@ -122,7 +123,11 @@ func Resolve(dir, ref string) string {
 	if i := strings.IndexAny(ref, "?#"); i >= 0 {
 		ref = ref[:i]
 	}
-	return localpath.Join(dir, filepath.FromSlash(ref))
+	p := localpath.Join(dir, filepath.FromSlash(ref))
+	if localpath.ForeignUNC(dir, p) {
+		return ""
+	}
+	return p
 }
 
 // Register 注册 lmasset 协议，须在创建窗口之前调用。
@@ -273,6 +278,16 @@ func UniqueName(dir, base string) string {
 
 // SaveImage 把图片字节写到文档的图片目录，返回插入 Markdown 用的相对路径。
 func SaveImage(docPath string, data []byte, now time.Time, r Rule) (string, error) {
+	return saveImage(docPath, "", data, now, r)
+}
+
+// SaveDroppedImage 同 SaveImage，用于拖入的图片文件，srcExt 是原文件的扩展名。位图按文件头定扩展名；
+// SVG 和 ICO 没有 DetectExt 认得的文件头，用 Sniff 按原扩展名核对内容后沿用原扩展名。
+func SaveDroppedImage(docPath, srcExt string, data []byte, now time.Time, r Rule) (string, error) {
+	return saveImage(docPath, srcExt, data, now, r)
+}
+
+func saveImage(docPath, srcExt string, data []byte, now time.Time, r Rule) (string, error) {
 	if docPath == "" {
 		return "", ErrNeedSave
 	}
@@ -284,6 +299,11 @@ func SaveImage(docPath string, data []byte, now time.Time, r Rule) (string, erro
 		head = head[:512]
 	}
 	ext := DetectExt(head)
+	if e := strings.ToLower(srcExt); ext == "" && (e == ".svg" || e == ".ico") {
+		if _, ok := Sniff(head, e); ok {
+			ext = e
+		}
+	}
 	if ext == "" {
 		return "", ErrNotImage
 	}
@@ -438,25 +458,36 @@ func (Service) SaveImage(ctx context.Context, data []byte) (string, error) {
 }
 
 // ImportDropped：拖入正文的文件。图片复制到图片目录，其他文件只计算相对路径（F6.3/F6.5）。
+// 结果与 paths 一一对应；某张图片读不了、不是图片或太大时，它的结果为空字符串（页面跳过），不影响其他文件。
 func (Service) ImportDropped(ctx context.Context, paths []string) ([]string, error) {
 	w, p, err := docPath(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return importDropped(w, p, paths)
+}
+
+// importDropped 是 ImportDropped 的实现：w 是调用者窗口（核对拖放登记），p 是文档路径（未命名为空）。
+func importDropped(w any, p string, paths []string) ([]string, error) {
 	out := make([]string, 0, len(paths))
 	for _, src := range paths {
 		if !wasDropped(w, src) {
 			return nil, ErrNotDropped
 		}
 		if _, ok := imageExt[strings.ToLower(filepath.Ext(src))]; ok {
-			data, err := os.ReadFile(src)
-			if err != nil {
-				return nil, err
-			}
 			if p == "" {
 				return nil, ErrNeedSave
 			}
-			rel, err := SaveImage(p, data, time.Now(), CurrentRule())
+			data, err := os.ReadFile(src)
+			if err != nil {
+				out = append(out, "")
+				continue
+			}
+			rel, err := SaveDroppedImage(p, filepath.Ext(src), data, time.Now(), CurrentRule())
+			if errors.Is(err, ErrNotImage) || errors.Is(err, ErrTooLarge) {
+				out = append(out, "")
+				continue
+			}
 			if err != nil {
 				return nil, err
 			}
