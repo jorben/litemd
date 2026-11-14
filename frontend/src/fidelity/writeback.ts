@@ -41,8 +41,10 @@ export type WriteMode = "unchanged" | "local" | "expanded" | "full";
 export interface WriteResult {
   text: string;
   mode: WriteMode;
-  /** 规范序列化的单元下标范围 [from, to)（基线中的下标）；full 时为全部 */
+  /** 规范序列化的单元下标范围 [from, to)（基线中的下标）；full 时为全部。from === to 表示在其前插入 */
   units: [number, number];
+  /** 规范序列化的节点在当前文档中的范围 [from, to)（local / expanded 时有） */
+  nodes?: [number, number];
 }
 
 function lineStarts(text: string): number[] {
@@ -185,7 +187,8 @@ export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNod
     if (boundary >= 0 || p === nb) {
       const after = boundary >= 0 ? boundary - 1 : units.length - 1;
       const text = assemble(schema, base, doc, 0, 0, p, nc - s, after);
-      if (verify(schema, base, doc, text, after + 1, after + 1, p, nc - s)) return { text, mode: "local", units: [after + 1, after + 1] };
+      if (verify(schema, base, doc, text, after + 1, after + 1, p, nc - s))
+        return { text, mode: "local", units: [after + 1, after + 1], nodes: [p, nc - s] };
       ua = Math.max(0, after);
       ub = Math.min(units.length, after + 2);
     } else {
@@ -207,7 +210,7 @@ export function serializeWithBaseline(schema: Schema, base: Baseline, doc: PMNod
     const curTo = nc - (nb - baseTo);
     if (curTo < curFrom) continue;
     const text = assemble(schema, base, doc, a, b, curFrom, curTo, null);
-    if (verify(schema, base, doc, text, a, b, curFrom, curTo)) return { text, mode, units: [a, b] };
+    if (verify(schema, base, doc, text, a, b, curFrom, curTo)) return { text, mode, units: [a, b], nodes: [curFrom, curTo] };
   }
   return { text: serializeMarkdown(schema, doc), mode: "full", units: [0, units.length] };
 }
@@ -247,12 +250,72 @@ function verify(
   return got === fingerprintOf(schema, canonical(schema, nodes));
 }
 
-/** 推送成功后更新基线（6.3 节第 6 步）：不重新解析，改动的单元并成一个。 */
+/**
+ * 推送成功后更新基线（6.3 节第 6 步）：不重新解析——改写的单元并成一个，后面的单元平移偏移与节点下标。
+ * 1 MB 文档重新解析约 1 s，每次推送都做会让输入停顿后卡住（NF2）。结果与新文本逐字节核对，
+ * 对不上（或少见的边界情况）时退回重新解析。
+ */
 export function commitBaseline(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult): Baseline {
   if (res.mode === "unchanged") return base;
-  if (res.mode === "full") return loadBaseline(schema, res.text);
-  // 局部改动：重新建立单元最简单可靠的办法是按新文本重建，再把节点替换为当前文档的同一对象
+  const shifted = res.mode === "full" || base.coarse || !res.nodes ? null : shiftUnits(schema, base, doc, res);
+  if (shifted) return shifted;
   const next = loadBaseline(schema, res.text);
-  if (next.doc.childCount !== doc.childCount) return { ...next, doc: next.doc };
+  if (res.mode === "full" || next.doc.childCount !== doc.childCount) return next;
   return { ...next, doc };
 }
+
+function shiftUnits(schema: Schema, base: Baseline, doc: PMNode, res: WriteResult): Baseline | null {
+  const { units } = base;
+  const [a, b] = res.units;
+  const [curFrom, curTo] = res.nodes!;
+  const nodeDelta = doc.childCount - base.doc.childCount;
+  const middle = canonical(schema, childrenOf(doc, curFrom, curTo));
+  const out: Unit[] = units.slice(0, a).map((u) => ({ ...u }));
+  let delta: number;
+  if (a === b) {
+    // 在第 a 个单元之前插入（assemble 的 insertAfter = a - 1）
+    if (!middle || curTo <= curFrom) return null;
+    let from: number;
+    let sep: string;
+    if (a === 0) {
+      from = base.lead.length;
+      sep = "\n\n";
+    } else {
+      const prev = out[a - 1]!;
+      from = prev.end + 2;
+      sep = prev.sep;
+      prev.sep = "\n\n";
+    }
+    out.push({ first: curFrom, count: curTo - curFrom, from, end: from + middle.length, sep });
+    delta = middle.length + 2;
+  } else {
+    const start = units[a]!.from;
+    const oldNext = b < units.length ? units[b]!.from : base.source.length;
+    if (middle) {
+      const sep = units[b - 1]!.sep;
+      out.push({ first: curFrom, count: curTo - curFrom, from: start, end: start + middle.length, sep });
+      delta = start + middle.length + sep.length - oldNext;
+    } else {
+      if (b === units.length) return null; // 删掉了结尾的块：assemble 会调整末尾空白，交给重新解析
+      delta = start - oldNext;
+    }
+  }
+  for (let i = b; i < units.length; i++) {
+    const u = units[i]!;
+    out.push({ ...u, first: u.first + nodeDelta, from: u.from + delta, end: u.end + delta });
+  }
+  if (out.length === 0) return null;
+  const next: Baseline = { source: res.text, doc, lead: base.lead, units: out, coarse: false };
+  // 核对：单元首尾相接正好覆盖新文本，节点数对得上
+  let text = next.lead;
+  let nodes = 0;
+  for (const u of out) {
+    if (u.from !== text.length || u.first !== nodes) return null;
+    text += res.text.slice(u.from, u.end) + u.sep;
+    nodes += u.count;
+  }
+  return text === res.text && nodes === doc.childCount ? next : null;
+}
+
+/** 测试用：直接调用不带退路的平移。 */
+export const __testShiftUnits = shiftUnits;

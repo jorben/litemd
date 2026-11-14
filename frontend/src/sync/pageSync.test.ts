@@ -66,3 +66,22 @@ describe("页面同步协议（技术方案第 5 节）", () => {
     expect(calls.at(-1)).toBe("dirty:21");
   });
 });
+
+describe("按键路径（NF2）", () => {
+  it("给了 getSize 时，edit() 不序列化全文；只在推送时取一次正文", async () => {
+    let gets = 0;
+    const timers: Array<() => void> = [];
+    const s = new PageSync({
+      client: { markDirty: async () => {}, setContent: async () => true, flushed: async () => {} },
+      getText: () => (gets++, "x"),
+      getSize: () => 1_000_000,
+      delay: (n) => (n > 200_000 ? 400 : 150),
+      setTimer: (fn) => timers.push(fn),
+      clearTimer: () => {},
+    });
+    for (let i = 0; i < 50; i++) s.edit();
+    expect(gets).toBe(0);
+    await s.push();
+    expect(gets).toBe(1);
+  });
+});

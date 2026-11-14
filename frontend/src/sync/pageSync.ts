@@ -15,6 +15,9 @@ export interface PageSyncOptions {
   client: SyncClient;
   /** 取当前正文（源码模式直接取编辑器文本；所见即所得经保真写回层序列化） */
   getText: () => string;
+  /** 文档大小的估计，只用来选防抖时长。每次按键都会调用，不能序列化全文（1 MB 文档序列化约 1 s，NF2）；
+   *  默认用 getText().length */
+  getSize?: () => number;
   /** 防抖时长；默认按文档大小：< 200 KB 150 ms，否则 400 ms */
   delay?: (size: number) => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -34,6 +37,7 @@ export class PageSync {
   constructor(opts: PageSyncOptions) {
     this.o = {
       delay: (size) => (size < 200_000 ? 150 : 400),
+      getSize: () => opts.getText().length,
       setTimer: (fn, ms) => setTimeout(fn, ms),
       clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
       ...opts,
@@ -66,7 +70,7 @@ export class PageSync {
     this.timer = this.o.setTimer(() => {
       this.timer = null;
       void this.push();
-    }, this.o.delay(this.o.getText().length));
+    }, this.o.delay(this.o.getSize()));
   }
 
   private cancel(): void {

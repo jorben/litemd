@@ -124,7 +124,7 @@ export async function docPage(app: HTMLElement): Promise<void> {
   const outline = $(".lm-outline");
 
   // ---- 编辑器 ----
-  const sync = new PageSync({ client: Session, getText: () => currentText() });
+  const sync = new PageSync({ client: Session, getText: () => currentText(), getSize: () => text.length });
   sync.reset(content.seq);
 
   const rich = new WysiwygEditor({
