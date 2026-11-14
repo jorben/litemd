@@ -3,6 +3,7 @@ const translations = {
     title: "LiteMd — One file, one window.",
     description: "A lightweight desktop Markdown editor for macOS, Windows and Linux. One file, one window. Save only what you changed.",
     skip: "Skip to content", navLabel: "Main navigation", navFeatures: "Features", navDownload: "Download",
+    themeLabel: "Color theme", themeSystem: "System", themeLight: "Light", themeDark: "Dark",
     intro: "A lightweight desktop Markdown editor",
     headline1: "One file,", headline2: "one window.",
     heroDescription: "Open Markdown like you open a picture.<br>Read a little, edit a little, get on with your day.",
@@ -66,6 +67,32 @@ const languageButton = document.querySelector(".language-switch");
 const viewDescription = document.querySelector("#view-description");
 const viewButtons = [...document.querySelectorAll("[data-view]")];
 const viewCopy = { preview: "viewPreview", wysiwyg: "viewWysiwyg", source: "viewSource", split: "viewSplit" };
+const themeSelect = document.querySelector("#theme-select");
+const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+const themeNames = { system: "themeSystem", light: "themeLight", dark: "themeDark" };
+let themePreference = document.documentElement.dataset.theme || "system";
+
+function applyTheme() {
+  document.documentElement.dataset.theme = themePreference;
+  themeSelect.value = themePreference;
+  document.querySelector(".theme-control").title = `${translations[language].themeLabel}: ${translations[language][themeNames[themePreference]]}`;
+  for (const icon of document.querySelectorAll("[data-theme-icon]")) icon.toggleAttribute("hidden", icon.dataset.themeIcon !== themePreference);
+  const background = getComputedStyle(document.documentElement).backgroundColor;
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = background;
+}
+
+themeSelect.addEventListener("change", () => {
+  themePreference = themeSelect.value;
+  applyTheme();
+  try { localStorage.setItem("litemd-theme", themePreference); } catch { /* The current page still respects the selection. */ }
+});
+systemTheme.addEventListener("change", applyTheme);
+window.addEventListener("storage", (event) => {
+  if (event.key !== "litemd-theme" && event.key !== null) return;
+  themePreference = Object.hasOwn(themeNames, event.newValue) ? event.newValue : "system";
+  applyTheme();
+});
+document.querySelector(".theme-control").hidden = false;
 
 function showView(view) {
   selectedView = view;
@@ -95,6 +122,7 @@ function setLanguage(nextLanguage) {
     ? "https://github.com/jorben/litemd/blob/master/README.zh-CN.md#快速开始"
     : "https://github.com/jorben/litemd#getting-started";
   if (releaseVersion) document.querySelector("#release-version").textContent = `${releaseVersion} · ${copy.latestStable}`;
+  applyTheme();
   showView(selectedView);
 }
 
