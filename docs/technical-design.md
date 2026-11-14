@@ -757,3 +757,4 @@ CI：PR 上跑 Go 测试、前端类型检查、lint、单元测试和保真回�
 | 6.3 节第 6 步：推送后不重新解析 | M1 曾按新文本重新解析建基线；v1 改回原设计：改写的单元并成一个、其后单元平移偏移与下标，与新文本逐字节核对，对不上时才重新解析。页面防抖计时只取文档大小，不再每次按键序列化全文 | 1 MB 文档所见即所得每次按键约 1 s（NF2，v1 性能测量发现），修复后 P95 约 13 ms；平移后的输出不会像重新解析那样重排未改动的表格（`test/fidelity/commit.test.ts`） |
 | 原型 `.md table`：表格最宽到正文宽度 | vmark 表格样式为 `width: max-content`，LiteMd 外壳覆盖为 `width: auto; max-width: 100%`、单元格 `overflow-wrap: anywhere`（`frontend/src/shell/shell.css`，导出 HTML 同） | 与原型一致；多数表格不再成为横向滚动区，100 KB 文档窗口的图形内存 92 → 41 MB（NF3，v1 性能测量发现） |
 | PRD F6.7：缺失图片显示原始路径 | vmark 只在悬停提示里给出路径；`showMediaError` 在容器上记 `data-lm-missing`，外壳用 `::after` 显示在占位下方（块级图片；行内图片仍只有悬停提示） | 满足 F6.7（`scripts/smoke-macos.sh`） |
+| PRD 第 7 节第 3 条：NF1–NF4 达标为发布条件 | v1.0 发布时 NF1（100 KB 文档已运行时打开中位 403 ms，目标 400 ms）与 NF3（100 KB 文档每窗口约 212 MB，目标 150 MB）未达标，经 Jorben 2026-11-14 同意延到 v1.x；`content-visibility: auto` 方案因破坏滚动定位撤回 | 剩余耗时与内存来自每个窗口独立 WebContent 进程的冷 JIT 与载入时的全量中间结构，需改编辑器载入方式（docs/perf-report.md） |
