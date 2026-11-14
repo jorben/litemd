@@ -95,29 +95,110 @@ html, body { margin: 0; height: 100%; background: var(--bg-color); color: var(--
 .lm-start-btn kbd { font: 12px var(--font-ui, system-ui); opacity: .7; }
 .lm-start-hint { margin-top: 18px; font-size: 12px; color: var(--text-tertiary); }
 
-/* 设置窗口 */
-.lm-settings { display: flex; flex-direction: column; font: 13px var(--font-ui, system-ui); }
-.lm-settings .tabs { flex: none; display: flex; justify-content: center; gap: 2px; padding: 10px 12px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
-.lm-settings .tabs button { min-width: 72px; padding: 6px 10px; border: 0; border-radius: 7px; background: none; color: var(--text-secondary); font: inherit; }
-.lm-settings .tabs button[aria-selected="true"] { background: var(--hover-bg); color: var(--accent-primary); font-weight: 600; }
-.lm-settings .body { flex: 1; overflow: auto; padding: 22px 34px 28px; }
-.lm-settings .row { display: grid; grid-template-columns: 160px 1fr; gap: 14px; padding: 9px 0; }
-.lm-settings .lbl { text-align: right; padding-top: 4px; }
-.lm-settings .ctl { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.lm-settings .help { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.5; }
+/* 设置窗口：顶部图标标签栏，下方浅灰底上的分组卡片（左侧名称与说明，右侧控件） */
+.lm-settings-root {
+  --set-canvas: color-mix(in srgb, var(--bg-secondary) 50%, var(--bg-color));
+  --set-card: var(--bg-color);
+  --set-card-edge: 0 0 0 .5px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.04);
+  --set-off: color-mix(in srgb, var(--text-color) 20%, transparent);
+}
+.lm-settings-root.dark {
+  --set-canvas: var(--bg-color);
+  --set-card: color-mix(in srgb, var(--bg-secondary) 70%, var(--bg-color));
+  --set-card-edge: 0 0 0 .5px rgba(255,255,255,.07);
+  --set-off: color-mix(in srgb, var(--text-color) 26%, transparent);
+  --set-thumb-edge: rgba(255,255,255,.16);
+}
+.lm-settings-root body { background: var(--set-canvas); }
+.lm-settings { display: flex; flex-direction: column; font: 13px/1.4 var(--font-ui, system-ui); background: var(--set-canvas); user-select: none; }
+.lm-settings .tabs { flex: none; display: flex; justify-content: center; gap: 4px; padding: 8px 12px; background: var(--bg-color); box-shadow: 0 .5px 0 var(--border-color), 0 1px 0 rgba(0,0,0,.03); position: relative; z-index: 1; }
+.lm-settings .tabs button { min-width: 72px; height: 50px; padding: 0 10px; box-sizing: border-box; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); font: inherit; font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: var(--cursor-interactive, default); transition: background-color .15s, color .15s; }
+.lm-settings .tabs button:hover { background: var(--hover-bg); color: var(--text-color); }
+.lm-settings .tabs button[aria-selected="true"] { background: var(--accent-bg); color: var(--accent-primary); font-weight: 600; }
+.lm-settings .ti { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.lm-settings .body { flex: 1; overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+
+.lm-settings .group { background: var(--set-card); border-radius: 10px; box-shadow: var(--set-card-edge); }
+.lm-settings .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; min-height: 44px; padding: 9px 14px; box-sizing: border-box; position: relative; }
+.lm-settings .row + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; background: var(--border-color); }
+.lm-settings .txt { min-width: 0; }
+.lm-settings .lbl { display: block; color: var(--text-color); font-weight: 500; }
+.lm-settings .help { margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); display: flex; gap: 5px; align-items: flex-start; }
 .lm-settings .help.warn { color: var(--warning-color, #8d5e00); }
-.lm-settings .help.plain { font-size: 12.5px; color: var(--text-secondary); }
-.lm-settings .sep { height: 1px; background: var(--border-color); margin: 8px 0 8px 174px; }
-.lm-settings select, .lm-settings input[type="text"] { height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--bg-color); color: var(--text-color); font: inherit; box-shadow: 0 0 0 1px var(--border-color); min-width: 200px; }
-.lm-settings label.chk { display: flex; gap: 8px; align-items: center; }
-.lm-settings input[type="checkbox"], .lm-settings input[type="radio"], .lm-settings input[type="range"] { accent-color: var(--accent-primary); }
-.lm-settings .inline { display: flex; gap: 10px; align-items: center; }
-.lm-settings .center { justify-content: center; margin-top: 14px; }
-.lm-settings .about { text-align: center; padding-top: 16px; }
-.lm-settings .about-icon { width: 84px; height: 84px; }
-.lm-settings .about h2 { margin: 10px 0 2px; font-size: 20px; }
-.lm-settings .about p { margin: 4px 0; color: var(--text-secondary); }
-.lm-settings .lic { margin-top: 18px; text-align: left; font-size: 12px; color: var(--text-secondary); background: var(--bg-secondary); padding: 10px 14px; border-radius: 8px; }
+.lm-settings .help .lm-i { width: 13px; height: 13px; margin-top: 1.5px; }
+.lm-settings .ctl { display: flex; align-items: center; justify-content: flex-end; }
+
+/* 下拉框与文本框 */
+.lm-settings .sel { position: relative; display: inline-flex; }
+.lm-settings select, .lm-settings .txt-in { height: 28px; width: 192px; box-sizing: border-box; padding: 0 28px 0 10px; border: 0; border-radius: 7px; background: var(--bg-color); color: var(--text-color); font: inherit; box-shadow: 0 0 0 .5px var(--control-border, var(--border-color)), 0 1px 1px rgba(0,0,0,.04); appearance: none; -webkit-appearance: none; cursor: var(--cursor-interactive, default); text-overflow: ellipsis; }
+.lm-settings .txt-in { padding-right: 10px; cursor: text; user-select: text; }
+.lm-settings .txt-in:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-primary); }
+.lm-settings select:hover { background: color-mix(in srgb, var(--text-color) 3%, var(--bg-color)); }
+.lm-settings .sel .lm-i { position: absolute; right: 8px; top: 50%; margin-top: -7px; color: var(--text-secondary); pointer-events: none; }
+
+/* 开关 */
+.lm-settings .sw { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 34px; height: 20px; margin: 0; border-radius: 10px; background: var(--set-off); cursor: var(--cursor-interactive, default); transition: background-color .2s; }
+.lm-settings .sw::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s cubic-bezier(.3,.7,.4,1); }
+.lm-settings .sw:checked { background: var(--accent-primary); }
+.lm-settings .sw:checked::before { transform: translateX(14px); }
+.lm-settings .sw:active::before { width: 19px; }
+.lm-settings .sw:checked:active::before { transform: translateX(11px); }
+
+/* 主题：三张缩略图 */
+.lm-settings .themes { display: flex; gap: 14px; }
+.lm-settings .themes button { padding: 0; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: var(--cursor-interactive, default); border-radius: 8px; }
+.lm-settings .themes button:focus-visible { outline: none; }
+.lm-settings .themes button:focus-visible .thumb { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.lm-settings .thumb { position: relative; display: block; width: 64px; height: 42px; border-radius: 7px; overflow: hidden; box-shadow: 0 0 0 .5px var(--set-thumb-edge, rgba(0,0,0,.18)), 0 1px 2px rgba(0,0,0,.08); transition: box-shadow .15s; }
+.lm-settings .thumb.light, .lm-settings .half.light { --tb: #fff; --tbar: #eee; --tink: rgba(26,26,26,.38); }
+.lm-settings .thumb.dark, .lm-settings .half.dark { --tb: #23262b; --tbar: #2e323a; --tink: rgba(214,217,222,.45); }
+.lm-settings .thumb, .lm-settings .half { background: var(--tb); }
+.lm-settings .half { position: absolute; inset: 0; }
+.lm-settings .half.dark { clip-path: inset(0 0 0 50%); }
+.lm-settings .thumb::before, .lm-settings .half::before { content: ""; position: absolute; inset: 0 0 auto; height: 9px; background: var(--tbar); }
+.lm-settings .thumb i { position: absolute; left: 10px; top: 16px; width: 36px; height: 3px; border-radius: 2px; background: var(--tink); }
+.lm-settings .thumb i::before, .lm-settings .thumb i::after { content: ""; position: absolute; left: 0; height: 3px; border-radius: 2px; background: var(--tink); }
+.lm-settings .thumb i::before { top: 7px; width: 44px; }
+.lm-settings .thumb i::after { top: 14px; width: 26px; }
+.lm-settings .themes button[aria-checked="true"] { color: var(--text-color); font-weight: 600; }
+.lm-settings .themes button[aria-checked="true"] .thumb { box-shadow: 0 0 0 2px var(--accent-primary), 0 1px 2px rgba(0,0,0,.08); }
+.lm-settings .themes button:hover:not([aria-checked="true"]) .thumb { box-shadow: 0 0 0 .5px var(--set-thumb-edge, rgba(0,0,0,.18)), 0 0 0 3px var(--hover-bg); }
+
+/* 字号滑块 */
+.lm-settings .slider { display: flex; align-items: center; gap: 8px; }
+.lm-settings .slider .a { color: var(--text-secondary); line-height: 1; font-weight: 500; }
+.lm-settings .slider .sm { font-size: 11px; } .lm-settings .slider .lg { font-size: 16px; }
+.lm-settings input[type="range"] { width: 120px; margin: 0; accent-color: var(--accent-primary); }
+.lm-settings output { min-width: 40px; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.lm-settings .lm-seg { background: color-mix(in srgb, var(--text-color) 7%, transparent); }
+.lm-settings .lm-seg button { height: 24px; min-width: 40px; justify-content: center; }
+
+/* 隐私说明 */
+.lm-settings .note { display: flex; gap: 10px; align-items: flex-start; padding: 2px 14px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.lm-settings .note .lm-i { width: 16px; height: 16px; flex: none; color: var(--success-color, #107736); margin-top: 1px; }
+.lm-settings .note p { margin: 0; }
+
+/* 关于 */
+.lm-settings .about { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 18px; }
+.lm-settings .about-icon { width: 80px; height: 80px; -webkit-user-drag: none; }
+.lm-settings .about h2 { margin: 10px 0 2px; font-size: 20px; font-weight: 650; }
+.lm-settings .about p { margin: 0; }
+.lm-settings .about .ver { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; user-select: text; }
+.lm-settings .about .tagline { margin-top: 10px; color: var(--text-color); }
+.lm-settings .about .upd { min-height: 18px; margin-top: 6px; font-size: 12px; color: var(--accent-primary); }
+.lm-settings .about .acts { display: flex; gap: 8px; margin-top: 6px; }
+.lm-settings .about .lm-btn { height: 28px; padding: 0 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.lm-settings .about .lm-btn:disabled { opacity: .6; }
+.lm-settings .about .lm-btn[aria-expanded="true"] { background: var(--accent-bg); color: var(--accent-primary); }
+.lm-settings .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: lm-spin .8s linear infinite; }
+@keyframes lm-spin { to { transform: rotate(360deg); } }
+.lm-settings .lic { margin-top: 16px; max-width: 460px; text-align: left; font-size: 12px; line-height: 1.6; color: var(--text-secondary); background: var(--set-card); box-shadow: var(--set-card-edge); padding: 10px 14px; border-radius: 10px; user-select: text; }
+.lm-settings .lic[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-settings *, .lm-settings *::before { transition: none !important; }
+  .lm-settings .spin { animation-duration: 2.4s; }
+}
 
 /* 导出选项对话框 */
 .lm-dialog { border: 0; border-radius: 12px; padding: 18px 20px 14px; min-width: 300px; background: var(--bg-color); color: var(--text-color); box-shadow: var(--popup-shadow, 0 10px 30px rgba(0,0,0,.2)); font: 13px var(--font-ui, system-ui); }
