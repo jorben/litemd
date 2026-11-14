@@ -24,6 +24,11 @@
  *     fully owns selection display in its active mode.
  *   - Empty selection → no decoration. A bare cursor while blurred
  *     should not render anything (would look like a stray bar).
+ *   - litemd: read-only views (preview, split preview) → no decoration.
+ *     They cannot take focus, so they always count as blurred; the native
+ *     selection already shows there. Wrapping the word selected by the
+ *     second mousedown of a double click replaced the clicked text node,
+ *     and WebKit then dropped `click` / `dblclick` (F3.8 double click to edit).
  *
  * @coordinates-with services/mcpBridge/v2/selection.ts — the MCP tools that
  *   benefit from visible selection while focus is elsewhere
@@ -48,6 +53,8 @@ export const inactiveSelectionPluginKey =
   new PluginKey<InactiveSelectionState>("inactiveSelection");
 
 export function inactiveSelectionPlugin(): Plugin<InactiveSelectionState> {
+  // litemd: decorations() only receives the state; keep the view to read `editable`
+  let editorView: EditorView | null = null;
   return new Plugin<InactiveSelectionState>({
     key: inactiveSelectionPluginKey,
 
@@ -69,6 +76,7 @@ export function inactiveSelectionPlugin(): Plugin<InactiveSelectionState> {
     },
 
     view(view: EditorView) {
+      editorView = view;
       const setFocused = (focused: boolean) => {
         // Defensive: a `blur` event can be delivered as a microtask after
         // the view starts tearing down. Dispatching into a destroyed view
@@ -91,6 +99,7 @@ export function inactiveSelectionPlugin(): Plugin<InactiveSelectionState> {
       setFocused(view.hasFocus());
       return {
         destroy() {
+          if (editorView === view) editorView = null;
           view.dom.removeEventListener("focus", onFocus);
           view.dom.removeEventListener("blur", onBlur);
         },
@@ -101,6 +110,7 @@ export function inactiveSelectionPlugin(): Plugin<InactiveSelectionState> {
       decorations(state: EditorState): DecorationSet | null {
         const pluginState = inactiveSelectionPluginKey.getState(state);
         if (!pluginState || pluginState.focused) return null;
+        if (editorView && !editorView.editable) return null; // litemd: read-only view
         const { from, to } = state.selection;
         if (from === to) return null;
         return DecorationSet.create(state.doc, [

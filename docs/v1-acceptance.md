@@ -60,7 +60,7 @@
 | F3.5 切换快捷键 | P0 | 完成 | [keybindings.md](keybindings.md)，菜单与页面同表（`keys.test.ts`） |
 | F3.6 切换保留位置 | P0 | 完成 | 按最近的块对齐（`frontend/src/shell/doc.ts`）；M1 e2e |
 | F3.7 默认预览、可改 | P1 | 完成 | 设置「打开文件时」 |
-| F3.8 双击进入编辑 | P2 | 完成 | `doc.ts` dblclick |
+| F3.8 双击进入编辑 | P2 | 完成 | `doc.ts` 第二次按下（`detail === 2`）；预览不画失焦选区（`inactiveSelectionPlugin.test.ts`） |
 
 ### F4 语法支持
 

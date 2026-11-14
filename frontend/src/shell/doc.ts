@@ -942,9 +942,15 @@ export async function docPage(app: HTMLElement): Promise<void> {
       else void host.openLink(href);
     }
   });
-  // F3.8：预览中双击正文进入所见即所得，光标落在双击处
-  richScroll.addEventListener("dblclick", (e) => {
-    if (mode !== "preview" || !allowed("wysiwyg")) return;
+  // F3.8：预览中双击正文进入所见即所得，光标落在双击处。
+  // 在第二次按下时切换，而不是等 dblclick：浏览器在这次按下后选中词，ProseMirror 同步选区时插件可能重绘被点中的
+  // 文字节点，WebKit 随后就不再派发 click / dblclick（曾经只有双击空白处才进得去）。阻止默认行为也不会留下选中的词。
+  richScroll.addEventListener("mousedown", (e) => {
+    if (e.detail !== 2 || e.button !== 0 || mode !== "preview" || !allowed("wysiwyg")) return;
+    if (e.target === richScroll && e.offsetX >= richScroll.clientWidth) return; // 滚动条
+    // 内嵌 HTML 有自己的双击（切到源码，HtmlNodeView）
+    if ((e.target as HTMLElement).closest(".html-preview-block, .html-preview-inline")) return;
+    e.preventDefault();
     const pos = rich.editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
     void setMode("wysiwyg").then(() => {
       if (pos) rich.editor.chain().focus().setTextSelection(pos.pos).run();
