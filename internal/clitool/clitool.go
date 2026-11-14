@@ -16,10 +16,10 @@ const Target = "/usr/local/bin/litemd"
 
 // Script 返回命令脚本：把参数交给应用的可执行文件（已运行时转给第一个实例，F1.3）。
 func Script(exe string) string {
-	return fmt.Sprintf("#!/bin/sh\n# LiteMd 命令行工具（由 LiteMd 设置安装）\nexec %q \"$@\" >/dev/null 2>&1 &\n", exe)
+	return "#!/bin/sh\n# LiteMd 命令行工具（由 LiteMd 设置安装）\nexec " + shellQuote(exe) + " \"$@\" >/dev/null 2>&1 &\n"
 }
 
-// shellQuote 用单引号包住字符串（给 osascript 里的 do shell script 用）。
+// shellQuote 用单引号包住字符串，sh 不再展开其中的 $、` 和 \（命令脚本和 osascript 里的 do shell script 用）。
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // Install 写入脚本；需要权限时通过 osascript 请求管理员授权。
