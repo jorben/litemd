@@ -1,5 +1,5 @@
 // 启动窗口（PRD F1.12，D7；视觉参照 docs/prototype.html 的启动窗口）。
-import { Settings, Start } from "../mygo";
+import { events, Settings, Start } from "../mygo";
 import { setSettings, getSettings } from "../settings/store";
 import { applyAppearance, watchSystemTheme } from "./theme";
 import { applyLanguage, t } from "./i18n";
@@ -15,6 +15,11 @@ export async function startPage(app: HTMLElement): Promise<void> {
   }
   applyAppearance(getSettings());
   watchSystemTheme(getSettings);
+  // 在设置窗口里改了主题、字体等，启动窗口要马上跟着变
+  events.settingsChanged.on((v) => {
+    setSettings(v);
+    applyAppearance(getSettings());
+  });
   document.title = "LiteMd";
   app.className = "lm-start";
   const mod = isMac ? "⌘" : "Ctrl+";
