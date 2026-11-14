@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
+	_ "github.com/egoist/mygo/locales/zh-Hans" // mygo 自己的文案（存储面板、关闭询问等）的简体中文
 )
 
 var english atomic.Bool
