@@ -1,22 +1,25 @@
-# PR 与 master：三个平台上跑 Go 测试、前端类型检查 / lint / 单元测试与保真回归，并构建安装包（技术方案第 9 节）。
+# 持续集成：PR 与 master 上，在三个平台跑 Go 测试、前端类型检查 / lint / 单元测试与保真回归，
+# 并构建未签名安装包（技术方案第 9 节）。不需要任何 secrets，fork 来的 PR 也能跑。
 name: CI
 
 on:
-  pull_request:
   push:
     branches: [master]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +37,18 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # actions/checkout 检出的是浅克隆的 refs/pull/N/merge，本地没有 base 和 PR head，先取回再比较。
+      # testdata 是按字节保存的保真语料（行尾空格、CRLF 都是样例的一部分），不做检查。
+      - name: Check whitespace in pull request changes
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+          git --no-pager diff --check "$BASE_SHA" "$HEAD_SHA" -- . ':(exclude)testdata'
+
       - name: Install frontend dependencies
         run: pnpm -C frontend install --frozen-lockfile
       - name: Go vet
@@ -59,6 +74,7 @@ jobs:
     name: Build (${{ matrix.name }})
     needs: test
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

@@ -138,9 +138,9 @@
 | 编号 | 优先级 | 状态 | 证据 |
 |---|---|---|---|
 | F10 设置窗口 | P1 | 完成 | 五个分组与 PRD 一致（`frontend/src/shell/settings.ts`） |
-| F11.1 macOS DMG + 签名公证 | P0 | 部分完成 | 本机产出 ad-hoc 签名 DMG 6.1 MB，挂载复制后可运行；`release.yml` 从 secrets 导入证书并公证（凭据未配置，按目标不在本机执行） |
-| F11.2 Windows 安装包 | P0 | 待手工验证 | `ci.yml` 在 windows-latest 构建，`release.yml` 用 NSIS 打包；SmartScreen 说明见 README |
-| F11.3 Linux | P2 | 完成（CI 配置） | `release.yml` 构建 linux/amd64、arm64 |
+| F11.1 macOS DMG + 签名公证 | P0 | 部分完成 | 本机产出 ad-hoc 签名 DMG 6.1 MB，挂载复制后可运行；`build.yml` 从 secrets 导入证书并公证（凭据未配置，按目标不在本机执行） |
+| F11.2 Windows 安装包 | P0 | 待手工验证 | `ci.yml` 在 windows-latest 构建，`build.yml` 用 NSIS 打包；SmartScreen 说明见 README |
+| F11.3 Linux | P2 | 完成（CI 配置） | `build.yml` 构建 linux/amd64、arm64 |
 | F11.4 自动更新 | P1 | 待手工验证 | `internal/update`；公钥在配置中，私钥在本机 mygo 配置目录与 CI secret；需要发布第一个 Release 后实测 |
 | F12 界面语言 | P1 | 完成 | 页面 `i18n.test.ts` 覆盖全部文案；菜单 `TestEnglishLabels`；e2e 英文界面；mygo 自身文案载入 zh-Hans |
 
@@ -209,5 +209,5 @@ Windows：待手工验证（双击打开、单实例、多窗口、自动保存�
 |---|---|
 | F5.9 中英间距视觉处理、F6.6 图片放大与右键菜单、F8.4 复制为 HTML / Markdown | v1.x |
 | NF1 打开 100 KB 文档 403 ms、NF3 100 KB 文档每窗口 212 MB | 经 Jorben 同意（2026-11-14）延到 v1.x：首屏优先渲染、推迟代码高亮与公式、减少载入时的中间结构（[perf-report.md](perf-report.md)） |
-| 正式签名、公证、发布 | 配置 secrets 后打 `v*` tag 由 `release.yml` 执行（凭据见 workflow 注释） |
+| 正式签名、公证、发布 | 配置 secrets 后打 `vX.Y.Z` tag（漏写 v 或写成大写 V 时 CI 自动纠正）由 `build.yml` 构建并发布为 prerelease，验证后手动转正（凭据见 workflow 注释） |
 | Windows / Linux 实机、输入法、读屏、打印面板、自动更新的手工验证 | 发布前人工按本清单走一遍 |

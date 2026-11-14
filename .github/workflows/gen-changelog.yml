@@ -1,0 +1,115 @@
+# 推送正式版 tag 时，按 Conventional Commits（带 gitmoji）生成 CHANGELOG.md，并向 master 提一个 PR。
+# 下一次发布时 MyGo 会从 CHANGELOG.md 里读取该版本那一节，作为更新窗口里的说明（标题写成 "## [1.2.0] - 日期"，MyGo 认得这种格式）。
+#
+# Tag：只认正式版的 vX.Y.Z；预发布 tag（如 v1.2.0-rc.1）跳过，它们的条目会合并进下一个正式版。
+# 漏了 v 或写成大写 V 的 tag 同样触发，PR 标题与分支用纠正后的 vX.Y.Z；
+# build.yml 为此补推的 vX.Y.Z 由 GITHUB_TOKEN 推送，不会再触发本 workflow。
+#
+# 仓库 secrets（Settings > Secrets and variables > Actions）：
+#   PAT_TOKEN  可选；需要 contents + pull-requests 的写权限，用它创建的 PR 才能触发 CI。
+#              不配置时退回 GITHUB_TOKEN，这时要在 Settings > Actions 里打开
+#              "Allow GitHub Actions to create and approve pull requests"。
+name: Update Changelog
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "V[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Existing release tag (e.g. v1.0.0)"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: changelog-${{ inputs.release_version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Resolve tags
+        id: tags
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.release_version }}
+          REF_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${INPUT_TAG:-$REF_TAG}"
+          if ! [[ "$CURRENT_TAG" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '${CURRENT_TAG}' is not a stable vX.Y.Z tag."
+            exit 1
+          fi
+          VERSION="${CURRENT_TAG#[vV]}"
+          RELEASE_TAG="v${VERSION}"
+          if ! git rev-parse -q --verify "refs/tags/${CURRENT_TAG}" >/dev/null; then
+            echo "::error::Tag '${CURRENT_TAG}' does not exist."
+            exit 1
+          fi
+          # 上一个正式版：版本号不同于当前版本、且是当前 tag 祖先的最新 X.Y.Z / vX.Y.Z / VX.Y.Z。
+          # 按去掉前缀后的版本号排序（前缀混用时 git 的 v:refname 排不对），同一版本的多个写法只算一个。
+          PREV_TAG=$(git tag -l \
+            | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' \
+            | while read -r tag; do echo "${tag#[vV]} $tag"; done \
+            | sort -t ' ' -k1,1Vr \
+            | while read -r version tag; do
+                [ "$version" = "$VERSION" ] && continue
+                if git merge-base --is-ancestor "$tag" "$CURRENT_TAG"; then echo "$tag"; break; fi
+              done || true)
+          {
+            echo "current_tag=${CURRENT_TAG}"
+            echo "release_tag=${RELEASE_TAG}"
+            echo "prev_tag=${PREV_TAG}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Current tag: ${CURRENT_TAG}, previous stable tag: ${PREV_TAG:-<none>}"
+
+      - name: Update CHANGELOG (since previous stable tag)
+        if: steps.tags.outputs.prev_tag != ''
+        uses: requarks/changelog-action@v1.10.3
+        with:
+          token: ${{ github.token }}
+          fromTag: ${{ steps.tags.outputs.current_tag }}
+          toTag: ${{ steps.tags.outputs.prev_tag }}
+          changelogFilePath: CHANGELOG.md
+
+      - name: Update CHANGELOG (first release)
+        if: steps.tags.outputs.prev_tag == ''
+        uses: requarks/changelog-action@v1.10.3
+        with:
+          token: ${{ github.token }}
+          tag: ${{ steps.tags.outputs.current_tag }}
+          changelogFilePath: CHANGELOG.md
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT_TOKEN || github.token }}
+          commit-message: "docs: 📝 update CHANGELOG.md for ${{ steps.tags.outputs.release_tag }}"
+          title: "docs: 📝 update CHANGELOG.md for ${{ steps.tags.outputs.release_tag }}"
+          body: |
+            Auto-generated changelog update for release `${{ steps.tags.outputs.release_tag }}`.
+            Comparing changes from `${{ steps.tags.outputs.prev_tag || 'repository start' }}` to `${{ steps.tags.outputs.release_tag }}`.
+
+            This PR was automatically created by the changelog workflow.
+          branch: changelog/${{ steps.tags.outputs.release_tag }}
+          base: master
+          add-paths: CHANGELOG.md
+          labels: documentation,automated
+          delete-branch: true

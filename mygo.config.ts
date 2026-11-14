@@ -7,7 +7,8 @@ const config: Config = {
   name: "LiteMd",
   slug: "litemd",
   identifier: "io.github.jorben.litemd",
-  version: "0.1.0",
+  // 发布构建由 build.yml 从 tag 注入（tag v1.2.0 → 1.2.0），MyGo 据此上传到 v1.2.0 的 Release；本机构建用默认值
+  version: process.env.LITEMD_VERSION || "0.1.0",
   copyright: "© 2026 Jorben",
   license: "Apache-2.0",
   devUrl: "http://localhost:5173",

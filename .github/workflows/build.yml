@@ -1,0 +1,309 @@
+# 发布构建。推送 vX.Y.Z（可带 -rc.1 这类后缀）的 tag 时：
+#   1. prepare：校验 tag（写成 X.Y.Z 或 VX.Y.Z 时在同一提交上补一个 vX.Y.Z，见下），用 Conventional Commits 生成
+#      这个版本的更新说明，在 vX.Y.Z 上建一个草稿 prerelease；
+#   2. build：三个平台同时构建。macOS 用 Developer ID 签名并公证（F11.1），Windows 安装包不做代码签名（D6）；
+#      更新包用 MYGO_UPDATER_PRIVATE_KEY 签名（F11.4），连同安装包一起由 mygo build -upload 上传到草稿；
+#   3. publish：所有平台都成功后，把草稿发布为 prerelease。
+# prerelease 永远不会成为 latest，已安装的应用不会更新到它。验证没问题后手动转正：
+#   gh release edit vX.Y.Z --prerelease=false --latest
+# 转正后它就是 latest，应用会从 releases/latest/download/ 读到更新清单。
+#
+# tag 约定为小写 v 开头。MyGo 只认这个前缀（updates.tagPrefix 为空会被重置为 "v"），更新清单里的下载地址写死为
+# releases/download/v<version>/…，增量更新也只在 v 开头的 Release 里找旧版本，所以 Release 必须挂在 vX.Y.Z 上。
+# 漏了 v（1.2.0）或写成大写（V1.2.0）时也照常发布：本 workflow 在同一提交上补推 v1.2.0，原 tag 保留不动。
+# 补推用的是 GITHUB_TOKEN，这种推送不会再触发任何 workflow。
+#
+# 版本号来自 tag：v1.2.0 → LITEMD_VERSION=1.2.0（mygo.config.ts 读取），MyGo 再上传到 v1.2.0 这个 Release。
+# 中途失败时用 "Re-run failed jobs" 重跑失败的平台即可，它会上传到同一个草稿并覆盖原有文件。
+#
+# 仓库 secrets（Settings > Secrets and variables > Actions）：
+#   MYGO_UPDATER_PRIVATE_KEY    更新签名私钥，即 mygo keygen 生成的 mygo-update.key 的内容
+#   MACOS_CERTIFICATE           Developer ID Application .p12（含私钥）的 base64
+#   MACOS_CERTIFICATE_PASSWORD  .p12 的密码
+#   MACOS_SIGNING_IDENTITY      签名身份，如 "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID                    用于公证的 Apple ID
+#   APPLE_TEAM_ID               Apple Developer Team ID
+#   APPLE_APP_PASSWORD          该 Apple ID 的 App 专用密码
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+      # 写错的前缀也接受，prepare 会纠正为小写 v
+      - "V[0-9]+.[0-9]+.[0-9]+*"
+      - "[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Existing tag to build and release (e.g. v1.0.0-rc.1)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write # 草稿 Release、上传与发布
+
+concurrency:
+  group: build-${{ inputs.release_version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.tags.outputs.current_tag }}
+      release_tag: ${{ steps.tags.outputs.release_tag }}
+      version: ${{ steps.tags.outputs.version }}
+      notes: ${{ steps.notes.outputs.notes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tags
+        id: tags
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.release_version }}
+          REF_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${INPUT_TAG:-$REF_TAG}"
+          if ! [[ "$CURRENT_TAG" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '${CURRENT_TAG}' is not vX.Y.Z (optionally with a -suffix)."
+            exit 1
+          fi
+          VERSION="${CURRENT_TAG#[vV]}"
+          RELEASE_TAG="v${VERSION}"
+          if [ "$RELEASE_TAG" != "$CURRENT_TAG" ]; then
+            echo "::warning::Tag '${CURRENT_TAG}' should be '${RELEASE_TAG}'; releasing as ${RELEASE_TAG}."
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${CURRENT_TAG}" >/dev/null; then
+            echo "::error::Tag '${CURRENT_TAG}' does not exist."
+            exit 1
+          fi
+          # 上一个正式版：版本号不同于当前版本、且是当前 tag 祖先的最新 X.Y.Z / vX.Y.Z / VX.Y.Z。
+          # 按去掉前缀后的版本号排序（前缀混用时 git 的 v:refname 排不对），同一版本的多个写法只算一个。
+          PREV_TAG=$(git tag -l \
+            | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' \
+            | while read -r tag; do echo "${tag#[vV]} $tag"; done \
+            | sort -t ' ' -k1,1Vr \
+            | while read -r version tag; do
+                [ "$version" = "$VERSION" ] && continue
+                if git merge-base --is-ancestor "$tag" "$CURRENT_TAG"; then echo "$tag"; break; fi
+              done || true)
+          {
+            echo "current_tag=${CURRENT_TAG}"
+            echo "release_tag=${RELEASE_TAG}"
+            echo "version=${VERSION}"
+            echo "prev_tag=${PREV_TAG}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Current tag: ${CURRENT_TAG}, release tag: ${RELEASE_TAG}, previous stable tag: ${PREV_TAG:-<none>}"
+
+      # MyGo 上传与更新清单都用 vX.Y.Z。推送的就是它时什么都不做；否则在同一提交上补一个，
+      # 已存在时必须指向同一提交。
+      - name: Normalize the tag for MyGo
+        shell: bash
+        env:
+          TAG: ${{ steps.tags.outputs.current_tag }}
+          RELEASE_TAG: ${{ steps.tags.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          COMMIT=$(git rev-parse "refs/tags/${TAG}^{commit}")
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            EXISTING=$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")
+            if [ "$EXISTING" != "$COMMIT" ]; then
+              echo "::error::${RELEASE_TAG} points to ${EXISTING}, but ${TAG} points to ${COMMIT}."
+              exit 1
+            fi
+            echo "${RELEASE_TAG} already points to ${COMMIT}"
+          else
+            git tag "$RELEASE_TAG" "$COMMIT"
+            git push origin "refs/tags/${RELEASE_TAG}"
+            echo "Pushed ${RELEASE_TAG} -> ${COMMIT}"
+          fi
+
+      - name: Generate changelog (since previous stable tag)
+        id: changelog_range
+        if: steps.tags.outputs.prev_tag != ''
+        uses: requarks/changelog-action@v1.10.3
+        with:
+          token: ${{ github.token }}
+          fromTag: ${{ steps.tags.outputs.current_tag }}
+          toTag: ${{ steps.tags.outputs.prev_tag }}
+          writeToFile: false
+
+      - name: Generate changelog (first release)
+        id: changelog_first
+        if: steps.tags.outputs.prev_tag == ''
+        uses: requarks/changelog-action@v1.10.3
+        with:
+          token: ${{ github.token }}
+          tag: ${{ steps.tags.outputs.current_tag }}
+          writeToFile: false
+
+      # 同一份说明既是 Release 正文，也是更新窗口里的说明（build 作业写成 CHANGELOG.md 的一节交给 MyGo）。
+      # MyGo 在某个版本没有说明时会直接失败，所以说明为空时补一行占位。
+      - name: Release notes
+        id: notes
+        shell: bash
+        env:
+          CHANGES: ${{ steps.changelog_range.outputs.changes || steps.changelog_first.outputs.changes }}
+        run: |
+          set -euo pipefail
+          # 去掉 "## " 开头的行：MyGo 遇到下一个二级标题就认为这一节结束了。
+          NOTES=$(printf '%s\n' "$CHANGES" | grep -v '^## ' || true)
+          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
+            NOTES="- No notable changes."
+          fi
+          printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+          DELIMITER="NOTES_$(openssl rand -hex 16)"
+          {
+            echo "notes<<${DELIMITER}"
+            printf '%s\n' "$NOTES"
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create the draft prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tags.outputs.release_tag }}
+          VERSION: ${{ steps.tags.outputs.version }}
+        run: |
+          set -euo pipefail
+          if IS_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$IS_DRAFT" != "true" ]; then
+              # 已发布（或已转正）的 Release 不再改动，避免覆盖用户已经在下载的文件。
+              echo "::error::Release $TAG is already published; delete it first or push a new tag."
+              exit 1
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --draft --prerelease --title "LiteMd $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+
+  build:
+    needs: prepare
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64" }
+          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64" }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+    env:
+      LITEMD_VERSION: ${{ needs.prepare.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
+
+      # 没有私钥时 mygo build 只警告、不生成更新清单，应用就再也收不到更新，所以这里直接失败。
+      - name: Check the updater key
+        shell: bash
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          [ -n "$MYGO_UPDATER_PRIVATE_KEY" ] || { echo "::error::MYGO_UPDATER_PRIVATE_KEY is not set"; exit 1; }
+
+      # 只有这一节会被 MyGo 读取。覆盖检出的 CHANGELOG.md 只影响本次构建，不会提交；
+      # 仓库里的 CHANGELOG.md 由 gen-changelog.yml 通过 PR 更新。
+      - name: Write the release notes for MyGo
+        shell: bash
+        env:
+          NOTES: ${{ needs.prepare.outputs.notes }}
+        run: printf '## [%s]\n\n%s\n' "$LITEMD_VERSION" "$NOTES" > CHANGELOG.md
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm -C frontend install --frozen-lockfile
+
+      - name: Install NSIS, for the Windows installer
+        if: matrix.name == 'Windows'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Import the certificate and the notary credentials
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD MACOS_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::missing signing secret $name"; exit 1; }
+          done
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          echo "::add-mask::$password"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" login.keychain
+          xcrun notarytool store-credentials notary --keychain "$keychain" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          # mygo.config.ts 读这两个变量：有 NOTARY_KEYCHAIN 才公证，签名身份取 MACOS_SIGNING_IDENTITY。
+          echo "NOTARY_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "MACOS_SIGNING_IDENTITY=$MACOS_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build, sign and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform "${{ matrix.platform }}" -upload
+
+      - name: Remove signing material
+        if: always() && runner.os == 'macOS'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+
+  publish:
+    needs: [prepare, build]
+    name: Publish prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Publish the draft as a prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          {
+            echo "### Published $TAG as a prerelease"
+            echo
+            echo "Installed apps update to it only after it is promoted:"
+            echo
+            echo '```sh'
+            echo "gh release edit $TAG --repo $GITHUB_REPOSITORY --prerelease=false --latest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
