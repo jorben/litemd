@@ -19,7 +19,7 @@ export async function startPage(app: HTMLElement): Promise<void> {
   app.className = "lm-start";
   const mod = isMac ? "⌘" : "Ctrl+";
   app.innerHTML = `
-    <img class="lm-start-icon" src="/icon.svg" alt="" aria-hidden="true">
+    <img class="lm-start-icon" src="/icon.png" alt="" aria-hidden="true">
     <h1>LiteMd</h1>
     <div class="lm-start-actions">
       <button class="lm-start-btn primary" data-act="new">${t("新建")}<kbd>${mod}N</kbd></button>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/icon.svg" width="96" height="96" alt="LiteMd 图标">
+  <img src="resources/icon.png" width="96" height="96" alt="LiteMd 图标">
 </p>
 
 <h1 align="center">LiteMd</h1>
