@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.1] - 2026-11-15
+### :sparkles: New Features
+- [`b0f118e`](https://github.com/jorben/litemd/commit/b0f118e7c421af7e5e42ea3f3158af24365d0ade) - **website**: ✨ Add bilingual landing page and GitHub Pages deployment *(commit by [@jorben](https://github.com/jorben))*
+
+### :bug: Bug Fixes
+- [`d958cd4`](https://github.com/jorben/litemd/commit/d958cd49e456ec4760de0804d09254d18903fd7d) - **cli**: 🐛 Quote the app path literally in the litemd script *(commit by [@jorben](https://github.com/jorben))*
+- [`07c789f`](https://github.com/jorben/litemd/commit/07c789f2751f6ddef69507b418589932c428bc15) - **settings**: 🐛 Keep the newest snapshot on disk under concurrent saves *(commit by [@jorben](https://github.com/jorben))*
+- [`6e41051`](https://github.com/jorben/litemd/commit/6e41051b4597075074acce75ee9c2121ba96f68a) - **assets**: 🐛 Block foreign UNC paths and remote images in offline exports *(commit by [@jorben](https://github.com/jorben))*
+- [`0883dc8`](https://github.com/jorben/litemd/commit/0883dc84345256b8ecd638aad57b29d04dc41237) - **editor**: 🐛 Fix plain-text paste, field shortcuts and details toggles *(commit by [@jorben](https://github.com/jorben))*
+- [`a402494`](https://github.com/jorben/litemd/commit/a4024947078e25f6639f688d8c7b530c1b836c2e) - **sync**: 🐛 Hold race conflicts until the user picks a version *(commit by [@jorben](https://github.com/jorben))*
+- [`64a6b59`](https://github.com/jorben/litemd/commit/64a6b594d1f24c60dfa69a5e547291a04da58ac2) - **editor**: 🐛 Enter editing on double click over text in preview *(commit by [@jorben](https://github.com/jorben))*
+
+
 ## [v0.1.0] - 2026-11-14
 ### :sparkles: New Features
 - [`88557e0`](https://github.com/jorben/litemd/commit/88557e050e9cc4fda8eeec0bced026411014d0d0) - **fidelity**: ✨ migrate vmark pipeline and add fidelity write-back prototype *(commit by [@jorben](https://github.com/jorben))*
@@ -54,3 +67,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [`3a5e28c`](https://github.com/jorben/litemd/commit/3a5e28cbdeef67e30a8f2464af101ed08fcad5b8) - **git**: 🔧 Check out text files with LF everywhere *(commit by [@jorben](https://github.com/jorben))*
 
 [v0.1.0]: https://github.com/jorben/litemd/compare/0.0.1...v0.1.0
+[v0.1.1]: https://github.com/jorben/litemd/compare/v0.1.0...v0.1.1
