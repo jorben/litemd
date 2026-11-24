@@ -1,6 +1,6 @@
 // 设置窗口（PRD F10；视觉参照 docs/prototype.html 的设置窗口，布局为分组卡片：左侧名称与说明，右侧控件）。
 // 改动立即保存并广播给所有窗口；自动保存开关重启后生效（D11），界面语言、按文件记住窗口重启后生效。
-import { Settings, Update, events, type Status, type View } from "../mygo";
+import { DefaultApp, Settings, Update, events, type DefaultStatus, type Status, type View } from "../mygo";
 import { getSettings, setSettings } from "../settings/store";
 import { applyAppearance, FONT_STEPS, watchSystemTheme } from "./theme";
 import { applyLanguage, t } from "./i18n";
@@ -41,6 +41,17 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
   // 窗口只能导航到前端自身且不开新窗口（links.Harden），直接打开文件会离开设置页
   let notices: { state: "idle" | "loading" | "failed" } | { state: "ready"; text: string } = { state: "idle" };
   let update: Status = { state: "idle", version: "", message: "" };
+  // 默认 Markdown 应用（只在能设置的平台显示）：打开窗口和窗口重新获得焦点时查询，用户可能在访达里改过
+  let defApp: DefaultStatus = { supported: false, isDefault: false, current: "" };
+  let defBusy = false;
+  let defFailed = false;
+  const loadDefApp = () =>
+    void DefaultApp.status().then((st) => {
+      defApp = st;
+      if (tab === "general") render();
+    }).catch(() => {});
+  loadDefApp();
+  window.addEventListener("focus", () => { if (!defBusy) loadDefApp(); });
 
   async function save(patch: Partial<View>): Promise<void> {
     try {
@@ -91,11 +102,27 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
   const group = (rows: string) => `<section class="group">${rows}</section>`;
   const restart = t("重启后生效。");
 
+  /** 默认 Markdown 应用：不是 LiteMd 时提供「设为默认」，由用户决定（系统可能弹窗确认）。 */
+  function defaultAppRow(): string {
+    const help = defFailed
+      ? t("没有设置成功，请重试，或在访达的「显示简介 › 打开方式」里设置。")
+      : defApp.isDefault
+        ? t("双击 .md 文件会用 LiteMd 打开。")
+        : defApp.current
+          ? t("目前双击 .md 文件会用「{app}」打开。", { app: esc(defApp.current) })
+          : t("目前没有打开 .md 文件的默认应用。");
+    const ctl = defApp.isDefault
+      ? `<button type="button" class="lm-btn" id="${id("defaultApp")}" aria-describedby="h-defaultApp" disabled>${t("已是默认")}</button>`
+      : `<button type="button" class="lm-btn" id="${id("defaultApp")}" data-act="default-app" aria-describedby="h-defaultApp"${defBusy ? " disabled" : ""}>${t(defBusy ? "正在设置…" : "设为默认")}</button>`;
+    return row("defaultApp", "默认 Markdown 应用", ctl, help, defFailed);
+  }
+
   function body(): string {
     switch (tab) {
       case "general": {
         const autoWarn = view.autosave !== view.autosaveEffective;
         return (
+          (defApp.supported ? group(defaultAppRow()) : "") +
           group(row("language", "界面语言", sel("language", [["system", "跟随系统"], ["zh-Hans", "简体中文"], ["en", "English"]]),
             t("重启后生效。文档内容不会被翻译。"), view.language !== boot.language)) +
           group(row("defaultMode", "打开文件时", sel("defaultMode", [["preview", "预览"], ["wysiwyg", "所见即所得"], ["source", "源码"], ["remember", "记住每个文件上次的模式"]]),
@@ -221,6 +248,15 @@ export async function settingsPage(app: HTMLElement): Promise<void> {
       void Update.check().catch(() => onUpdate({ state: "idle", version: "", message: "" }));
     }
     if (act === "restart") void Update.restart();
+    if (act === "default-app" && !defBusy) {
+      defBusy = true;
+      defFailed = false;
+      render();
+      void DefaultApp.setDefault().then(
+        (st) => { defApp = st; defFailed = !st.isDefault; },
+        () => { defFailed = true; },
+      ).finally(() => { defBusy = false; render(); });
+    }
   });
   app.addEventListener("keydown", (e) => {
     const el = e.target as HTMLElement;

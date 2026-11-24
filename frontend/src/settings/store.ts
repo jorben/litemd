@@ -20,6 +20,7 @@ export interface PageSettings {
   networkImages: boolean;
   autoUpdate: boolean;
   statusBar: boolean;
+  checkDefaultApp: boolean;
 }
 
 export const DEFAULT_SETTINGS: PageSettings = {
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: PageSettings = {
   networkImages: true,
   autoUpdate: true,
   statusBar: true,
+  checkDefaultApp: true,
 };
 
 let current: PageSettings = { ...DEFAULT_SETTINGS };

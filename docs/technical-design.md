@@ -281,6 +281,7 @@ func showIfIdle() {
 - 拖入文件：`win.OnFileDrop` → 筛出 Markdown 扩展名和 `.txt` → 逐个 `docs.Open(path)`。
 - 最近打开（F1.12⑤、D16）：`Start.recent()` 取 `mygo.App.RecentDocuments()` 的前 5 个（mygo 在打开、保存时把文件移到最前，已不存在的文件不返回；用户目录缩写为 `~`）；`Start.openRecent(path)` 只接受当前列出的路径，再 `docs.Open`；`Start.clearRecent()` 调 `mygo.App.ClearRecentDocuments()`，与菜单「清除菜单」相同。页面在加载和窗口获得焦点时刷新列表。
 - 启动窗口里的 ⌘N / ⌘O 走菜单的 `RoleNew` / `RoleOpen`，与按钮效果相同。
+- 默认应用提示条：页面加载和窗口获得焦点时调用 `DefaultApp.status()`（第 3.4 节）；能设置（`supported`）且 LiteMd 不是全部 Markdown 扩展名的默认应用时，在窗口顶部显示提示条，「设为默认」调用 `DefaultApp.setDefault()`，「不再提示」把设置 `checkDefaultApp` 改为 false（默认 true）。之后仍可在设置 › 通用里设置。
 - **关闭启动窗口**：`newDocWindow` 在文档窗口**创建之后**调用 `start.Close()`，因此 Windows/Linux 上不会出现瞬间“没有窗口”而触发退出。不能放在 `App.OnWindowCreated` 里做：那个事件在 mygo 把窗口登记到文档之前触发，`docs.ForWindow(w)` 还是 `nil`。`start.Close()` 先隐藏启动窗口，`CloseDelay`（1 秒）后再真正关闭：拖入文件时文档窗口是在页面 drop 事件中打开的，立刻销毁启动窗口的 WKWebView 会让 WebKit 的拖放回调访问已销毁的页面而崩溃（macOS 27 实测，应用 exit(2) 退出）。
 - 用户关闭启动窗口：macOS 应用留在 Dock（mygo 已为文档应用把 `OnWindowAllClosed` 设为空操作）；Windows/Linux 上没有其他窗口时由 mygo 默认行为退出。
 
@@ -311,6 +312,7 @@ func showIfIdle() {
 | `Export` | `pdf(html, opts)` / `print(html)` | F8.2/F8.3：Go 生成自包含 HTML，在隐藏的 Untrusted 窗口中打印（第 7 节） |
 | `Settings` | `get` `set` | 改动后 `Broadcast("settings-changed")` 通知所有窗口 |
 | `Shell` | `revealInFolder` `copyPath` | F6.6 |
+| `DefaultApp` | `status()` → `{supported, isDefault, current}`、`setDefault()` | 设置 › 通用 › 默认 Markdown 应用。mygo 只能查询默认应用（`Shell.DefaultApp`），不能设置，所以在 `internal/defaultapp` 里各平台自己实现：目前只有 macOS（经 purego/objc 调用 `NSWorkspace setDefaultApplicationAtURL:toOpenContentType:`），其他平台和开发版 `supported` 为 false，设置页不显示这一项。只在用户点击时修改，不在安装或启动时自动抢占 |
 
 ### 3.5 本地图片协议 `lmasset`
 
