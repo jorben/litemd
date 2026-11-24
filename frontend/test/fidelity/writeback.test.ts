@@ -103,8 +103,6 @@ describe("V4 保真写回", () => {
   const corpus = loadCorpus();
   const schema = getProductionSchema();
 
-  // 整个语料库在一个用例里跑完：Windows CI 上正常也要 50 秒左右，离单元测试默认的 60 秒上限太近，
-  // 机器稍忙就超时（与结果无关）。这里只防卡死，不当作性能断言。
   it("三项指标", () => {
     const rows: Record<string, unknown>[] = [];
     let noEdit = 0;
@@ -180,5 +178,5 @@ describe("V4 保真写回", () => {
     expect(undoBad).toBe(0);
     expect(semantic).toBe(localTotal);
     expect(local / localTotal).toBeGreaterThanOrEqual(0.98);
-  }, 180_000);
+  });
 });

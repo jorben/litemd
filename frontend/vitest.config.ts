@@ -13,6 +13,10 @@ const TIMING = [
   "src/vmark/utils/markdownPipeline/__tests__/pathological/pathologicalScaling.test.ts",
 ];
 
+// 整个保真语料库（testdata/fidelity，260 多份）在一个用例里跑完的测试：Windows CI 上正常就要 35–55 秒，
+// 机器稍忙就超过单元测试的 60 秒上限（与结果无关）。单独成项目、放宽到 180 秒，只防卡死，不当作性能断言。
+const CORPUS = ["test/fidelity/**/*.test.ts"];
+
 const shared = {
   resolve: { alias: aliases },
   define: { __VMARK_VERSION__: JSON.stringify("0.0.0-test") },
@@ -30,8 +34,19 @@ export default defineConfig({
           environment: "node",
           setupFiles: ["./test/setupDom.ts"],
           include: ["src/**/*.test.ts", "test/**/*.test.ts"],
-          exclude: TIMING,
+          exclude: [...TIMING, ...CORPUS],
           testTimeout: 60_000,
+        },
+      },
+      {
+        ...shared,
+        test: {
+          name: "corpus",
+          globals: true,
+          environment: "node",
+          setupFiles: ["./test/setupDom.ts"],
+          include: CORPUS,
+          testTimeout: 180_000,
         },
       },
       {
