@@ -45,6 +45,8 @@ type Settings struct {
 	AutoUpdate    bool `json:"autoUpdate"`    // F11.4
 	// 界面
 	StatusBar bool `json:"statusBar"`
+	// 启动窗口在 LiteMd 不是 Markdown 文件的默认应用时显示提示条；点「不再提示」后关闭
+	CheckDefaultApp bool `json:"checkDefaultApp"`
 }
 
 // Defaults 返回出厂设置。
@@ -53,7 +55,7 @@ func Defaults() Settings {
 		Version: Version, DefaultMode: "preview", Autosave: true, RestoreWindow: true, Language: "system",
 		ImageRule: "assets", ImageCustom: "images", PasteRich: true, SpellCheck: false, TabWidth: 4,
 		Theme: "system", FontScale: 1, Width: "medium", BodyFont: "system", CodeFont: "system",
-		NetworkImages: true, AutoUpdate: true, StatusBar: true,
+		NetworkImages: true, AutoUpdate: true, StatusBar: true, CheckDefaultApp: true,
 	}
 }
 

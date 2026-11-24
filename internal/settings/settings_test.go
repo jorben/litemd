@@ -20,7 +20,7 @@ func TestDecodeFillsMissingAndFixesInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Theme != "dark" || s.DefaultMode != "preview" || s.TabWidth != 4 || s.FontScale != 1 || !s.Autosave || s.ImageRule != "assets" {
+	if s.Theme != "dark" || s.DefaultMode != "preview" || s.TabWidth != 4 || s.FontScale != 1 || !s.Autosave || s.ImageRule != "assets" || !s.CheckDefaultApp {
 		t.Fatalf("%+v", s)
 	}
 	if _, err := Decode([]byte("{broken")); err == nil {

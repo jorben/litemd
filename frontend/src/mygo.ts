@@ -23,6 +23,16 @@ export interface ContentInfo {
   seq: number;
 }
 
+/** DefaultStatus 是设置页看到的状态。 */
+export interface DefaultStatus {
+  /** 本平台、本构建能设置（开发版不声明文件类型，也为 false） */
+  supported: boolean;
+  /** 全部 Markdown 扩展名都由 LiteMd 打开 */
+  isDefault: boolean;
+  /** 不是 LiteMd 时，当前打开 .md 的应用名称；没有默认应用时为空 */
+  current: string;
+}
+
 /**
  * DocumentState describes a document, as Document.State returns it and
  * pages of its window get it.
@@ -151,6 +161,8 @@ export interface Settings {
   autoUpdate: boolean;
   /** 界面 */
   statusBar: boolean;
+  /** 启动窗口在 LiteMd 不是 Markdown 文件的默认应用时显示提示条；点「不再提示」后关闭 */
+  checkDefaultApp: boolean;
 }
 
 /** Status 是发给页面的更新状态。 */
@@ -197,6 +209,8 @@ export interface View {
   autoUpdate: boolean;
   /** 界面 */
   statusBar: boolean;
+  /** 启动窗口在 LiteMd 不是 Markdown 文件的默认应用时显示提示条；点「不再提示」后关闭 */
+  checkDefaultApp: boolean;
   autosaveEffective: boolean;
 }
 
@@ -413,6 +427,18 @@ export const FileState = {
   /** Set 保存调用者窗口文档的状态。 */
   set(fs: FileState): Promise<void> {
     return call("FileState.Set", fs);
+  },
+} as const;
+
+/** Service 是绑定给设置页的服务。 */
+export const DefaultApp = {
+  /** SetDefault 把 LiteMd 设为全部 Markdown 扩展名的默认应用，返回设置后的状态。 */
+  setDefault(): Promise<DefaultStatus> {
+    return call("DefaultApp.SetDefault");
+  },
+  /** Status 返回 LiteMd 是否为 Markdown 文件的默认应用。 */
+  status(): Promise<DefaultStatus> {
+    return call("DefaultApp.Status");
   },
 } as const;
 

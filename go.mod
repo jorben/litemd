@@ -3,6 +3,7 @@ module github.com/jorben/litemd
 go 1.27.4
 
 require (
+	github.com/ebitengine/purego v0.11.1
 	github.com/egoist/mygo v0.9.1-0.20261112203958-6eaa7fb47e01
 	golang.org/x/text v0.43.0
 )
@@ -10,7 +11,6 @@ require (
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/cloudflare/circl v1.6.2 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	go.digitalxero.dev/rpm v0.3.4 // indirect

@@ -8,6 +8,8 @@ export const EN: Record<string, string> = {
   "切换到所见即所得": "Switch to WYSIWYG",
   // 启动窗口
   "新建": "New", "打开…": "Open…", "也可以把 .md 文件拖到这里": "Or drop a .md file here",
+  "LiteMd 还不是 Markdown 文件的默认应用": "LiteMd isn't your default Markdown app",
+  "没有设置成功，可以重试，或在设置里查看。": "Couldn't set it. Try again, or check Settings.", "不再提示": "Don't Ask Again",
   "最近打开": "Recent", "清除记录": "Clear", "还没有最近打开的文件": "No recent files",
   // 查找
   "查找": "Find", "查找内容": "Find", "替换": "Replace", "替换为": "Replace with", "全部替换": "Replace All",
@@ -52,6 +54,11 @@ export const EN: Record<string, string> = {
   "保存": "Saving", "自动保存已存在的文件": "Autosave existing files", "重启 LiteMd 后生效。": "Takes effect after restarting LiteMd.",
   "停止输入约 1 秒后写入磁盘；未命名文档关闭时询问。": "Writes to disk about 1 second after you stop typing; untitled documents ask on close.",
   "窗口": "Windows", "按文件记住窗口大小和位置": "Remember window size and position per file", "重启后生效。": "Takes effect after restart.",
+  "默认 Markdown 应用": "Default Markdown app", "设为默认": "Make Default", "已是默认": "Default", "正在设置…": "Setting…",
+  "双击 .md 文件会用 LiteMd 打开。": "Double-clicking a .md file opens it in LiteMd.",
+  "目前双击 .md 文件会用「{app}」打开。": "Double-clicking a .md file currently opens it in {app}.",
+  "目前没有打开 .md 文件的默认应用。": "No app is set to open .md files yet.",
+  "没有设置成功，请重试，或在访达的「显示简介 › 打开方式」里设置。": "Couldn't set it. Try again, or use Get Info › Open With in Finder.",
   "界面语言": "Language", "跟随系统": "System", "简体中文": "简体中文", "重启后生效。文档内容不会被翻译。": "Takes effect after restart. Document content isn't translated.",
   "粘贴的图片存到": "Save pasted images to", "./<文件名>.assets/": "./<file name>.assets/", "与文件同一目录": "The file's folder",
   "自定义相对路径": "Custom relative path",
