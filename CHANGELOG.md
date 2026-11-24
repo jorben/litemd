@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-11-24
+### :sparkles: New Features
+- [`35a8ca9`](https://github.com/jorben/litemd/commit/35a8ca9762977800e53a0b1d8635e0e09ba7329e) - **start**: ✨ Offer to make LiteMd the default Markdown app
+
+### :white_check_mark: Tests
+- [`b57d722`](https://github.com/jorben/litemd/commit/b57d72211e46b47bbf327da7b1a69b385f641e3d) - **fidelity**: ✅ Give the writeback corpus test a 180 s timeout
+- [`4d13840`](https://github.com/jorben/litemd/commit/4d1384038f12ca082d6c3f6b1cad490efdd1e642) - **fidelity**: ✅ Run corpus tests under a 180 s timeout *(commit by [@jorben](https://github.com/jorben))*
+
+
 ## [v0.1.1] - 2026-11-15
 ### :sparkles: New Features
 - [`b0f118e`](https://github.com/jorben/litemd/commit/b0f118e7c421af7e5e42ea3f3158af24365d0ade) - **website**: ✨ Add bilingual landing page and GitHub Pages deployment *(commit by [@jorben](https://github.com/jorben))*
@@ -68,3 +77,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [v0.1.0]: https://github.com/jorben/litemd/compare/0.0.1...v0.1.0
 [v0.1.1]: https://github.com/jorben/litemd/compare/v0.1.0...v0.1.1
+[0.1.2]: https://github.com/jorben/litemd/compare/v0.1.1...0.1.2
