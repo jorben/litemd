@@ -22,7 +22,12 @@ function isListItemEmpty(state: EditorState, listItemType: NodeType): boolean {
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
     if (node.type === listItemType) {
-      return node.textContent.trim() === "";
+      // litemd: 结构判空，避免仅含图片/行内公式等原子节点的列表项被误判为空项而抬出列表
+      if (node.childCount !== 1) return false;
+      const first = node.child(0);
+      if (!first.isTextblock) return false;
+      if (first.childCount === 0) return true;
+      return first.childCount === 1 && first.firstChild!.isText && first.textContent.trim() === "";
     }
   }
   /* v8 ignore next -- @preserve cursor always inside a list item when this fn is called */
@@ -87,10 +92,15 @@ function handleListEnter(
   const listItemType = findListItemType(state.schema);
   if (!listItemType) return false;
 
-  const { $from } = state.selection;
+  const { $from, $to } = state.selection;
   if (!isPositionInsideListItem($from, listItemType)) return false;
 
-  if (isListItemEmpty(state, listItemType)) {
+  // litemd: 列表项内部嵌套代码块、标题或引用/折叠块/表格等容器时，以及跨块选区时，交回对应处理
+  if (!$from.sameParent($to)) return false;
+  if ($from.depth < 2 || $from.node(-1).type !== listItemType) return false;
+  if ($from.parent.type.spec.code || $from.parent.type.name === "heading") return false;
+
+  if (state.selection.empty && isListItemEmpty(state, listItemType)) {
     return liftListItem(listItemType)(state, dispatch);
   }
 

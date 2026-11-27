@@ -15,6 +15,8 @@
 export const sourceLineAttr = {
   sourceLine: {
     default: null as number | null,
+    // litemd: 拆行产生的新块不继承上一行的 sourceLine
+    keepOnSplit: false,
     // No parseHTML - sourceLine is only set programmatically during MDAST conversion
     // No renderHTML - sourceLine is internal, not rendered to DOM
   },
