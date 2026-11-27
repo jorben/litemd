@@ -20,6 +20,8 @@
 export const headingIdAttr = {
   id: {
     default: null as string | null,
+    // litemd: 拆分标题时不复制 DOM id，避免文档中出现重复锚点
+    keepOnSplit: false,
     parseHTML: (element: HTMLElement) => element.getAttribute("id"),
     renderHTML: (attributes: { id?: string | null }) =>
       attributes.id ? { id: attributes.id } : {},

@@ -44,6 +44,7 @@ import { listContinuationExtension } from "@/plugins/listContinuation/tiptap";
 import { listBackspaceExtension } from "@/plugins/listBackspace/tiptap";
 import { listClickFixExtension } from "@/plugins/listClickFix/tiptap";
 import { safeBlockSplitExtension } from "@/plugins/safeBlockSplit/tiptap";
+import { newlineBehaviorExtension } from "./newlineBehavior";
 import { blockEscapeExtension } from "@/plugins/blockEscape";
 import { tabIndentExtension } from "@/plugins/tabIndent/tiptap";
 import { autoPairExtension } from "@/plugins/autoPair/tiptap";
@@ -94,18 +95,19 @@ export function buildExtensions(): Extensions {
       horizontalRule: false,
       link: false,
       code: false, // 换成下面不排斥其他标记的版本
+      hardBreak: { keepMarks: false },
       undoRedo: { depth: 200, newGroupDelay: 500 },
     }),
     undoIntegrityExtension,
     // litemd: Tiptap 的 code 标记 excludes "_"（不与任何标记共存），但 Markdown 允许 **`x`**、
     // [`x`](url)。管线会构造出 code+bold 的文本，而撤销「取消加粗」时 AddMarkStep 遵守 excludes、
-    // 加不回 bold，撤销无法回到原文（D3）。这里允许 code 与其他标记共存。
-    Code.extend({ excludes: "" }),
+    // 加不回 bold，撤销无法回到原文（D3）。这里允许 code 与其他标记共存，且换行不延续。
+    Code.extend({ excludes: "", keepOnSplit: false }),
     vmarkLinkExtension,
-    CJKBold,
-    CJKItalic,
-    HeadingWithSourceLine,
+    CJKBold.extend({ keepOnSplit: false }),
+    CJKItalic.extend({ keepOnSplit: false }),
     ParagraphWithSourceLine,
+    HeadingWithSourceLine,
     CodeBlockWithSourceLine,
     BlockquoteWithSourceLine,
     BulletListWithSourceLine,
@@ -148,6 +150,7 @@ export function buildExtensions(): Extensions {
     blockMathKeymapExtension,
     listContinuationExtension,
     safeBlockSplitExtension,
+    newlineBehaviorExtension,
     listBackspaceExtension,
     listClickFixExtension,
     tabIndentExtension.configure({ getTabSize: () => getSettings().tabWidth }),
